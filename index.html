@@ -74,6 +74,30 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
 #trayfilters{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
 .chip{border:1px solid var(--line);border-radius:10px;padding:1px 9px;font-size:.68rem;cursor:pointer;color:var(--cream)}
 .chip.on{background:var(--accent);color:#241d12;border-color:var(--accent)}
+/* editing */
+#savegh{display:none;color:#241d12;background:var(--accent);border-color:var(--accent)}
+#settings{display:none}
+.editbar{display:flex;gap:8px;margin:10px 0 2px}
+.editbar button,.edittools button{background:none;border:1px solid #b9a87f;color:#6b5d42;padding:3px 12px;
+  font-size:.72rem;cursor:pointer;border-radius:3px;font-family:'Courier New',monospace}
+.edittools button.primary{background:#1E8449;border-color:#1E8449;color:#fff}
+.edittools{display:flex;gap:8px;margin:8px 0}
+.card textarea{width:100%;min-height:400px;background:#fffdf4;color:var(--ink);border:1px solid #cbbf9e;
+  border-radius:3px;font-family:Georgia,serif;font-size:.9rem;line-height:1.55;padding:12px}
+.card input.ttledit{width:100%;background:#fffdf4;color:var(--ink);border:1px solid #cbbf9e;border-radius:3px;
+  font-family:inherit;font-size:.95rem;padding:6px 10px;margin:8px 0 6px}
+#modal{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center}
+#modal .mbox{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px 22px;max-width:480px;color:var(--cream)}
+#modal h3{margin:0 0 6px;font-weight:normal;color:var(--accent);letter-spacing:.08em}
+#modal p{color:var(--dim);font-size:.8rem;line-height:1.5}
+#modal input{width:100%;background:#1c1510;border:1px solid var(--line);color:var(--cream);padding:8px;
+  border-radius:3px;font-family:'Courier New',monospace;font-size:.78rem}
+#modal .mbtns{display:flex;gap:8px;margin-top:12px}
+#modal .mbtns button{background:none;border:1px solid var(--line);color:var(--cream);padding:6px 16px;
+  border-radius:3px;font-family:inherit;font-size:.85rem;cursor:pointer}
+#modal .mbtns button.primary{background:var(--accent);border-color:var(--accent);color:#241d12}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--accent);color:#241d12;
+  padding:8px 20px;border-radius:4px;z-index:120;font-size:.85rem;display:none}
 /* storyline & character views */
 .slhead{margin:24px 0 4px;font-size:1rem;letter-spacing:.1em;display:flex;gap:10px;align-items:baseline}
 .slhead .cnt{color:var(--dim);font-size:.75rem;font-family:'Courier New',monospace}
@@ -99,10 +123,26 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
   <input id="q" placeholder="search everything…">
   <div class="tools">
     <span id="dirty">unsaved layout · </span>
+    <button id="savegh">Save layout</button>
     <button id="export">Export books.json</button>
     <button id="reset">Reset layout</button>
+    <button id="settings" title="GitHub token for editing">⚙</button>
   </div>
 </header>
+<div id="modal"><div class="mbox">
+  <h3>EDITING SETUP</h3>
+  <p>Paste a fine-grained GitHub token with <b>Contents: read &amp; write</b> on
+  <b>clayborneo/library-canon</b> only. It is stored in this browser, encrypted with the
+  site password. Every save becomes a commit under your account; the live site rebakes
+  in about a minute.</p>
+  <input id="m-tok" type="password" placeholder="github_pat_…">
+  <div class="mbtns">
+    <button class="primary" id="m-save">Save token</button>
+    <button id="m-clear">Forget token</button>
+    <button id="m-close">Close</button>
+  </div>
+</div></div>
+<div id="toast"></div>
 <main id="main"></main>
 <script id="data" type="application/json">/*__DATA__*/</script>
 <script>
@@ -114,10 +154,103 @@ const SLNAME = {MOG:'Mog', SHALLA:'Shalla Shalla', AI:'Animal Intimacies', SNOG:
   WORLD:'World Doc', CHARACTERS:'Character Compendium', NONCORE:'Non-Core Storylines', VOICE:'Voice Notes (unplaced)'};
 const SLORDER = ['MOG','SHALLA','AI','SNOG','PB','SM','MOUTH','META','WORLD','CHARACTERS','NONCORE','VOICE'];
 
-let DATA=null, CH=null, books=null;
+let DATA=null, CH=null, books=null, PW=null, TOKEN=null;
 let view='shelf', query='', trayQuery='', trayFilter=null, dragId=null;
+const REPO='clayborneo/library-canon';
 
-function markDirty(on){ document.getElementById('dirty').style.display = on?'inline':'none'; }
+function toast(msg,ms){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block';
+  clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none', ms||3500); }
+const b64=u=>btoa(Array.from(u,c=>String.fromCharCode(c)).join(''));
+const unb64=s=>Uint8Array.from(atob(s.replace(/\s/g,'')),c=>c.charCodeAt(0));
+const encTxt=s=>new TextEncoder().encode(s);
+const decTxt=u=>new TextDecoder().decode(u);
+
+async function gh(path, opts={}){
+  const r=await fetch('https://api.github.com'+path,{...opts,
+    headers:{'Authorization':'Bearer '+TOKEN,'Accept':'application/vnd.github+json',...(opts.headers||{})}});
+  if(!r.ok) throw new Error('GitHub '+r.status+': '+(await r.text()).slice(0,180));
+  return r.json();
+}
+async function saveToken(tok){
+  const salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12));
+  const key=await deriveKey(PW,salt,['encrypt']);
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,encTxt(tok)));
+  localStorage.setItem('library-canon-token',JSON.stringify({salt:b64(salt),iv:b64(iv),ct:b64(ct)}));
+  TOKEN=tok; refreshEditUI();
+}
+async function loadToken(){
+  const j=localStorage.getItem('library-canon-token'); if(!j) return;
+  try{ const o=JSON.parse(j); const key=await deriveKey(PW,unb64(o.salt),['decrypt']);
+    TOKEN=decTxt(new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(o.iv)},key,unb64(o.ct))));
+  }catch(e){ localStorage.removeItem('library-canon-token'); }
+  refreshEditUI();
+}
+function refreshEditUI(){
+  if(PW) document.getElementById('settings').style.display='inline';
+  document.getElementById('settings').textContent = TOKEN?'⚙ editing on':'⚙';
+  document.getElementById('savegh').style.display =
+    (TOKEN && document.getElementById('dirty').style.display!=='none')?'inline':'none';
+}
+function editsOverlay(){ try{ return JSON.parse(localStorage.getItem('library-canon-edits')||'{}'); }catch(e){ return {}; } }
+function rememberEdit(id){ const ov=editsOverlay();
+  ov[id]={title:CH[id].title,body:CH[id].body,title_status:CH[id].title_status,ts:Date.now()};
+  localStorage.setItem('library-canon-edits',JSON.stringify(ov)); }
+
+async function saveChapter(id,newTitle,newBody){
+  const c=CH[id], api=`/repos/${REPO}/contents/chapters/${encodeURIComponent(c.path)}`;
+  const cur=await gh(api);
+  const text=decTxt(unb64(cur.content));
+  const m=text.match(/^---\n[\s\S]*?\n---\n\s*/);
+  if(!m) throw new Error('frontmatter not found in '+c.path);
+  let front=m[0];
+  const titleChanged = newTitle!==c.title;
+  if(titleChanged){
+    front=front.replace(/^title: .*$/m,'title: "'+newTitle.replace(/"/g,'\\"')+'"')
+               .replace(/^title_status: .*$/m,'title_status: clay');
+  }
+  const file=front+newBody.trim()+'\n';
+  await gh(api,{method:'PUT',body:JSON.stringify({message:'site edit: '+newTitle,content:b64(encTxt(file)),sha:cur.sha})});
+  c.title=newTitle; c.body=newBody.trim(); c.words=c.body.split(/\s+/).length;
+  if(titleChanged) c.title_status='clay';
+  rememberEdit(id);
+  toast('Saved. The live site rebakes in about a minute; your edit shows here right away.');
+}
+async function saveLayout(){
+  const api=`/repos/${REPO}/contents/structure/books.json`;
+  const cur=await gh(api);
+  const out=JSON.stringify({version:DATA.version+' (edited on site)',seed:DATA.seed,books},null,1)+'\n';
+  await gh(api,{method:'PUT',body:JSON.stringify({message:'site edit: book layout',content:b64(encTxt(out)),sha:cur.sha})});
+  localStorage.removeItem('library-canon-books'); markDirty(false); refreshEditUI();
+  toast('Layout saved to GitHub.');
+}
+
+function addEditBar(card){
+  if(!TOKEN || card.querySelector('.editbar')) return;
+  const bar=document.createElement('div'); bar.className='editbar';
+  const btn=document.createElement('button'); btn.textContent='✎ edit';
+  btn.addEventListener('click',()=>openEditor(card));
+  bar.appendChild(btn); card.querySelector('.body').prepend(bar);
+}
+function openEditor(card){
+  const id=card.dataset.id, c=CH[id], body=card.querySelector('.body');
+  body.innerHTML='';
+  const ti=document.createElement('input'); ti.className='ttledit'; ti.value=c.title;
+  const ta=document.createElement('textarea'); ta.value=c.body;
+  const tools=document.createElement('div'); tools.className='edittools';
+  const sv=document.createElement('button'); sv.className='primary'; sv.textContent='Save';
+  const cx=document.createElement('button'); cx.textContent='Cancel';
+  tools.append(sv,cx); body.append(ti,ta,tools);
+  const closeTo=(render)=>{ body.innerHTML=render?renderBody(id):''; if(render) addEditBar(card);
+    card.querySelector('.ttl').innerHTML=esc(CH[id].title)+(CH[id].title_status==='placeholder'?'<span class="ph">°</span>':''); };
+  cx.addEventListener('click',()=>closeTo(true));
+  sv.addEventListener('click',async()=>{
+    sv.disabled=true; sv.textContent='Saving…';
+    try{ await saveChapter(id,ti.value.trim()||c.title,ta.value); closeTo(true); }
+    catch(err){ sv.disabled=false; sv.textContent='Save'; toast('Save failed: '+err.message,6000); }
+  });
+}
+
+function markDirty(on){ document.getElementById('dirty').style.display = on?'inline':'none'; refreshEditUI(); }
 function save(){ localStorage.setItem('library-canon-books', JSON.stringify(books)); markDirty(true); }
 function shelved(){ const s=new Set(); books.forEach(b=>b.chapters.forEach(c=>s.add(c))); return s; }
 function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
@@ -145,7 +278,7 @@ function cardHTML(id, draggable){
 function bindCards(root){
   root.querySelectorAll('.card .head').forEach(h=>h.addEventListener('click',()=>{
     const card=h.parentElement, body=card.querySelector('.body');
-    if(body.dataset.lazy){ body.innerHTML=renderBody(card.dataset.id); delete body.dataset.lazy; }
+    if(body.dataset.lazy){ body.innerHTML=renderBody(card.dataset.id); delete body.dataset.lazy; addEditBar(card); }
     card.classList.toggle('open');
   }));
   root.querySelectorAll('.card[draggable]').forEach(c=>{
@@ -255,9 +388,29 @@ document.getElementById('reset').addEventListener('click',()=>{
     localStorage.removeItem('library-canon-books'); books=JSON.parse(JSON.stringify(DATA.books)); markDirty(false); render();
   }
 });
+document.getElementById('settings').addEventListener('click',()=>{ document.getElementById('modal').style.display='flex'; });
+document.getElementById('m-close').addEventListener('click',()=>{ document.getElementById('modal').style.display='none'; });
+document.getElementById('m-clear').addEventListener('click',()=>{
+  localStorage.removeItem('library-canon-token'); TOKEN=null; refreshEditUI();
+  document.getElementById('modal').style.display='none'; toast('Token forgotten.'); render(); });
+document.getElementById('m-save').addEventListener('click',async()=>{
+  const t=document.getElementById('m-tok').value.trim(); if(!t) return;
+  try{ await saveToken(t); document.getElementById('m-tok').value='';
+    document.getElementById('modal').style.display='none'; toast('Editing is on. Open any card and hit ✎ edit.'); render(); }
+  catch(e){ toast('Could not store token: '+e.message,6000); } });
+document.getElementById('savegh').addEventListener('click',async()=>{
+  const b=document.getElementById('savegh'); b.disabled=true;
+  try{ await saveLayout(); } catch(e){ toast('Layout save failed: '+e.message,6000); }
+  b.disabled=false; });
 
 function boot(data){
   DATA=data; CH=DATA.chapters;
+  // recent site edits shown immediately while the encrypted build catches up
+  const ov=editsOverlay(), keep={}, now=Date.now();
+  for(const [id,e] of Object.entries(ov)){
+    if(now-e.ts<15*60*1000 && CH[id]){ CH[id].title=e.title; CH[id].body=e.body;
+      CH[id].title_status=e.title_status; keep[id]=e; } }
+  localStorage.setItem('library-canon-edits',JSON.stringify(keep));
   books=JSON.parse(JSON.stringify(DATA.books));
   const saved=localStorage.getItem('library-canon-books');
   if(saved){ try{ books=JSON.parse(saved); markDirty(true);}catch(e){} }
@@ -270,10 +423,10 @@ function boot(data){
 }
 
 /* ---------- boot: inline data (local build) or encrypted fetch (public site) ---------- */
-async function deriveKey(pw, salt){
+async function deriveKey(pw, salt, usages){
   const km=await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey({name:'PBKDF2', salt, iterations:310000, hash:'SHA-256'}, km,
-    {name:'AES-GCM', length:256}, false, ['decrypt']);
+    {name:'AES-GCM', length:256}, false, usages||['decrypt']);
 }
 async function tryUnlock(pw){
   const res=await fetch('data.enc',{cache:'no-store'}); if(!res.ok) throw new Error('data.enc not found');
@@ -281,7 +434,9 @@ async function tryUnlock(pw){
   const key=await deriveKey(pw, b.slice(0,16));
   const plain=await crypto.subtle.decrypt({name:'AES-GCM', iv:b.slice(16,28)}, key, b.slice(28));
   document.getElementById('lock').style.display='none';
+  PW=pw;
   boot(JSON.parse(new TextDecoder().decode(plain)));
+  await loadToken();
 }
 let inline=null;
 try{ inline=JSON.parse(document.getElementById('data').textContent); }catch(e){}
