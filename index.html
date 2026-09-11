@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Library — Canon</title>
+<style>
+:root{
+  --ground:#231a12; --panel:#2e2318; --card:#f5eeDD; --card2:#efe6cf;
+  --ink:#241d12; --paper-ink:#2a2418; --cream:#f0e7d0; --dim:#b8a888;
+  --green:#4caf6d; --accent:#d9a441; --line:#4a3a26;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--cream);
+  font-family:Georgia,'Iowan Old Style',serif;
+  background-image:radial-gradient(ellipse at 20% 0%, #2c2115 0%, #231a12 55%, #1c1510 100%);}
+header{position:sticky;top:0;z-index:50;background:rgba(35,26,18,.97);border-bottom:1px solid var(--line);
+  padding:10px 18px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+header h1{font-size:1.05rem;margin:0 14px 0 0;letter-spacing:.12em;font-weight:normal;color:var(--accent)}
+header h1 .sub{color:var(--dim);letter-spacing:.02em;font-size:.8rem}
+nav button{background:none;border:1px solid var(--line);color:var(--cream);padding:5px 14px;margin-right:6px;
+  font-family:inherit;font-size:.85rem;cursor:pointer;border-radius:3px}
+nav button.on{background:var(--accent);color:#241d12;border-color:var(--accent)}
+#q{background:#1c1510;border:1px solid var(--line);color:var(--cream);padding:6px 10px;border-radius:3px;
+  font-family:inherit;width:230px;font-size:.85rem}
+.tools{margin-left:auto;display:flex;gap:6px;align-items:center}
+.tools button{background:none;border:1px solid var(--line);color:var(--dim);padding:4px 10px;font-size:.75rem;cursor:pointer;border-radius:3px;font-family:inherit}
+#dirty{color:var(--accent);font-size:.75rem;display:none}
+main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
+.legend{color:var(--dim);font-size:.78rem;margin:4px 0 14px;line-height:1.5}
+/* lock screen */
+#lock{position:fixed;inset:0;z-index:100;background:var(--ground);display:flex;align-items:center;justify-content:center}
+#lock .box{text-align:center;max-width:340px}
+#lock h2{color:var(--accent);letter-spacing:.14em;font-weight:normal}
+#lock p{color:var(--dim);font-size:.85rem}
+#lock input{width:100%;background:#1c1510;border:1px solid var(--line);color:var(--cream);padding:9px 12px;
+  border-radius:3px;font-family:inherit;font-size:1rem;text-align:center}
+#lock button{margin-top:12px;background:var(--accent);border:none;color:#241d12;padding:8px 26px;border-radius:3px;
+  font-family:inherit;font-size:.9rem;cursor:pointer}
+#lockerr{color:#e08a7a;font-size:.8rem;min-height:1.2em}
+/* cards */
+.card{background:var(--card);color:var(--ink);border-radius:4px;margin:7px 0;box-shadow:0 1px 4px rgba(0,0,0,.45);
+  border-left:5px solid #888;overflow:hidden}
+.card .head{padding:8px 11px;cursor:pointer;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.card .head:hover{background:var(--card2)}
+.card .ttl{font-size:.92rem;flex:1}
+.card .ttl .ph{color:#8a6d3b;font-size:.7rem;vertical-align:super}
+.card .meta{font-size:.68rem;color:#6b5d42;white-space:nowrap;font-family:'Courier New',monospace}
+.card .body{display:none;padding:4px 16px 16px;border-top:1px solid #d8cdb2;max-height:520px;overflow:auto;
+  font-size:.9rem;line-height:1.55}
+.card.open .body{display:block}
+.card .body p{margin:.65em 0}
+.card .src{color:#1E8449;font-family:'Courier New',monospace;font-style:italic;font-size:.78rem}
+.card .brk{text-align:center;letter-spacing:.5em;color:#8a7a58}
+.grip{cursor:grab;color:#a5926b;font-size:.8rem;user-select:none}
+.card.dragging{opacity:.4}
+/* shelf */
+.book{background:var(--panel);border:1px solid var(--line);border-radius:6px;margin:14px 0;padding:10px 14px}
+.book>.bhead{display:flex;gap:10px;align-items:baseline;cursor:pointer}
+.book .num{color:var(--accent);font-family:'Courier New',monospace;font-size:.8rem}
+.book .btitle{font-size:1.05rem;letter-spacing:.04em}
+.book .bnote{color:var(--dim);font-size:.78rem;flex:1;margin-left:6px}
+.book .bcount{color:var(--dim);font-size:.72rem;font-family:'Courier New',monospace}
+.book .chlist{display:none;margin-top:6px}
+.book.open .chlist{display:block}
+.dropzone{height:7px;border-radius:3px;margin:1px 0}
+.dropzone.hot{background:var(--accent);height:14px}
+#shelfwrap{display:grid;grid-template-columns:1fr 330px;gap:18px}
+#tray{position:sticky;top:64px;align-self:start;max-height:calc(100vh - 90px);overflow:auto;
+  background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px}
+#tray h3{margin:2px 0 8px;font-size:.85rem;color:var(--dim);font-weight:normal;letter-spacing:.08em}
+#trayq{width:100%;margin-bottom:8px;background:#1c1510;border:1px solid var(--line);color:var(--cream);
+  padding:5px 8px;border-radius:3px;font-family:inherit;font-size:.8rem}
+#trayfilters{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.chip{border:1px solid var(--line);border-radius:10px;padding:1px 9px;font-size:.68rem;cursor:pointer;color:var(--cream)}
+.chip.on{background:var(--accent);color:#241d12;border-color:var(--accent)}
+/* storyline & character views */
+.slhead{margin:24px 0 4px;font-size:1rem;letter-spacing:.1em;display:flex;gap:10px;align-items:baseline}
+.slhead .cnt{color:var(--dim);font-size:.75rem;font-family:'Courier New',monospace}
+.swatch{width:12px;height:12px;border-radius:2px;display:inline-block}
+@media(max-width:900px){#shelfwrap{grid-template-columns:1fr}#tray{position:static;max-height:none}}
+</style>
+</head>
+<body>
+<div id="lock" style="display:none"><div class="box">
+  <h2>THE LIBRARY</h2>
+  <p>Private. Enter the password to decrypt.</p>
+  <input id="pw" type="password" placeholder="password" autofocus>
+  <div id="lockerr"></div>
+  <button id="unlock">Enter</button>
+</div></div>
+<header>
+  <h1>THE LIBRARY <span class="sub">· canon · every word Clay's, ordering draggable</span></h1>
+  <nav>
+    <button data-v="shelf" class="on">Shelf</button>
+    <button data-v="storylines">Storylines</button>
+    <button data-v="characters">Characters</button>
+  </nav>
+  <input id="q" placeholder="search everything…">
+  <div class="tools">
+    <span id="dirty">unsaved layout · </span>
+    <button id="export">Export books.json</button>
+    <button id="reset">Reset layout</button>
+  </div>
+</header>
+<main id="main"></main>
+<script id="data" type="application/json">/*__DATA__*/</script>
+<script>
+const SLCOLOR = {MOG:'#a67c52', SHALLA:'#c2a878', AI:'#d98fa6', SNOG:'#7d8ca3', PB:'#3fa8a0',
+  SM:'#8a7bc8', MOUTH:'#c25b4e', META:'#3f9142', WORLD:'#6b7f6a', CHARACTERS:'#b0876b',
+  NONCORE:'#996f8e', VOICE:'#d9a441'};
+const SLNAME = {MOG:'Mog', SHALLA:'Shalla Shalla', AI:'Animal Intimacies', SNOG:'Snog Mysteries',
+  PB:'The Painted Blade', SM:'Something Moving', MOUTH:'The Mouth', META:'The Meta-Frame',
+  WORLD:'World Doc', CHARACTERS:'Character Compendium', NONCORE:'Non-Core Storylines', VOICE:'Voice Notes (unplaced)'};
+const SLORDER = ['MOG','SHALLA','AI','SNOG','PB','SM','MOUTH','META','WORLD','CHARACTERS','NONCORE','VOICE'];
+
+let DATA=null, CH=null, books=null;
+let view='shelf', query='', trayQuery='', trayFilter=null, dragId=null;
+
+function markDirty(on){ document.getElementById('dirty').style.display = on?'inline':'none'; }
+function save(){ localStorage.setItem('library-canon-books', JSON.stringify(books)); markDirty(true); }
+function shelved(){ const s=new Set(); books.forEach(b=>b.chapters.forEach(c=>s.add(c))); return s; }
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+function renderBody(id){
+  const c = CH[id];
+  return c.body.split(/\n\s*\n/).map(p=>{
+    p = esc(p.trim()); if(!p) return '';
+    if(/^⟦/.test(p)) return `<p class="src">${p}</p>`;
+    if(/^\*{3}$/.test(p)) return `<p class="brk">***</p>`;
+    return `<p>${p}</p>`;
+  }).join('');
+}
+function cardHTML(id, draggable){
+  const c = CH[id]; if(!c) return '';
+  const col = SLCOLOR[c.storyline]||'#888';
+  const ph = c.title_status==='placeholder' ? '<span class="ph" title="Claude placeholder title">°</span>' : '';
+  const chars = (c.characters||[]).slice(0,4).join(', ');
+  return `<div class="card" data-id="${id}" ${draggable?'draggable="true"':''} style="border-left-color:${col}">
+    <div class="head">${draggable?'<span class="grip">⠿</span>':''}
+      <span class="ttl">${esc(c.title)}${ph}</span>
+      <span class="meta">${c.storyline} · ${c.words}w · ${c.maturity}${chars?' · '+esc(chars):''}</span></div>
+    <div class="body" data-lazy="1"></div></div>`;
+}
+function bindCards(root){
+  root.querySelectorAll('.card .head').forEach(h=>h.addEventListener('click',()=>{
+    const card=h.parentElement, body=card.querySelector('.body');
+    if(body.dataset.lazy){ body.innerHTML=renderBody(card.dataset.id); delete body.dataset.lazy; }
+    card.classList.toggle('open');
+  }));
+  root.querySelectorAll('.card[draggable]').forEach(c=>{
+    c.addEventListener('dragstart',e=>{dragId=c.dataset.id;c.classList.add('dragging');});
+    c.addEventListener('dragend',()=>{dragId=null;c.classList.remove('dragging');});
+  });
+}
+function removeEverywhere(id){ books.forEach(b=>{ const i=b.chapters.indexOf(id); if(i>=0)b.chapters.splice(i,1); }); }
+
+/* ---------- SHELF ---------- */
+function renderShelf(){
+  const m=document.getElementById('main');
+  const sh=shelved();
+  let html='<div class="legend">Drag cards between books or in from the Unshelved tray. ° marks a placeholder title (Claude\'s, for orientation). Layout changes save locally; use <b>Export books.json</b> to hand the new order to Claude.</div><div id="shelfwrap"><div id="shelfcol">';
+  books.forEach((b,bi)=>{
+    const wc=b.chapters.reduce((a,c)=>a+(CH[c]?CH[c].words:0),0);
+    html+=`<div class="book" data-b="${bi}"><div class="bhead"><span class="num">${String(bi+1).padStart(2,'0')}</span>
+      <span class="btitle">${esc(b.title)}</span><span class="bnote">${esc(b.note||'')}</span>
+      <span class="bcount">${b.chapters.length} ch · ${Math.round(wc/1000)}k words</span></div><div class="chlist">`;
+    html+=`<div class="dropzone" data-b="${bi}" data-i="0"></div>`;
+    b.chapters.forEach((cid,ci)=>{ html+=cardHTML(cid,true)+`<div class="dropzone" data-b="${bi}" data-i="${ci+1}"></div>`; });
+    html+='</div></div>';
+  });
+  html+='</div><div id="tray"><h3>UNSHELVED ('+(Object.keys(CH).length-sh.size)+')</h3><input id="trayq" placeholder="filter…" value="'+esc(trayQuery)+'"><div id="trayfilters">';
+  SLORDER.forEach(sl=>{ html+=`<span class="chip${trayFilter===sl?' on':''}" data-sl="${sl}" style="border-color:${SLCOLOR[sl]}">${sl}</span>`; });
+  html+='</div><div id="traycards">';
+  Object.values(CH).filter(c=>!sh.has(c.id))
+    .filter(c=>!trayFilter||c.storyline===trayFilter)
+    .filter(c=>!trayQuery||c.title.toLowerCase().includes(trayQuery.toLowerCase()))
+    .slice(0,140).forEach(c=>{ html+=cardHTML(c.id,true); });
+  html+='</div></div></div>';
+  m.innerHTML=html; bindCards(m);
+  if(!window._shelfOpened){ window._shelfOpened=1; const fb=m.querySelector('.book'); if(fb){ fb.classList.add('open');
+    const fc=fb.querySelector('.card .head'); if(fc) fc.click(); } }
+  m.querySelectorAll('.bhead').forEach(h=>h.addEventListener('click',()=>h.parentElement.classList.toggle('open')));
+  m.querySelectorAll('.dropzone').forEach(z=>{
+    z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('hot');});
+    z.addEventListener('dragleave',()=>z.classList.remove('hot'));
+    z.addEventListener('drop',e=>{ e.preventDefault(); z.classList.remove('hot'); if(!dragId)return;
+      const bi=+z.dataset.b, i=+z.dataset.i;
+      const before=books[bi].chapters.slice(0,i).filter(c=>c!==dragId).length;
+      removeEverywhere(dragId); books[bi].chapters.splice(before,0,dragId); save(); renderShelf();
+      m.querySelectorAll('.book')[bi].classList.add('open');
+    });
+  });
+  const tq=document.getElementById('trayq');
+  tq.addEventListener('input',()=>{trayQuery=tq.value; renderShelf(); document.getElementById('trayq').focus();});
+  m.querySelectorAll('.chip').forEach(ch=>ch.addEventListener('click',()=>{
+    trayFilter = trayFilter===ch.dataset.sl?null:ch.dataset.sl; renderShelf(); }));
+}
+
+/* ---------- STORYLINES ---------- */
+function renderStorylines(){
+  const m=document.getElementById('main'); let html='<div class="legend">Every chapter grouped by storyline, in workbench order. Voice-note chapters are folded in where they were tagged.</div>';
+  SLORDER.forEach(sl=>{
+    const cs=Object.values(CH).filter(c=>c.storyline===sl);
+    if(!cs.length)return;
+    html+=`<div class="slhead"><span class="swatch" style="background:${SLCOLOR[sl]}"></span>${SLNAME[sl]} <span class="cnt">${cs.length} chapters · ${Math.round(cs.reduce((a,c)=>a+c.words,0)/1000)}k words</span></div>`;
+    cs.forEach(c=>{ html+=cardHTML(c.id,false); });
+  });
+  m.innerHTML=html; bindCards(m);
+}
+
+/* ---------- CHARACTERS ---------- */
+function renderCharacters(){
+  const m=document.getElementById('main');
+  const idx={};
+  Object.values(CH).forEach(c=>(c.characters||[]).forEach(n=>{ (idx[n]=idx[n]||[]).push(c.id); }));
+  const names=Object.keys(idx).sort((a,b)=>idx[b].length-idx[a].length);
+  let html='<div class="legend">Pick a character to see every chapter they appear in (auto-tagged by name; refine anytime).</div><div id="trayfilters">';
+  names.slice(0,40).forEach(n=>{ html+=`<span class="chip${window._char===n?' on':''}" data-n="${esc(n)}">${esc(n)} · ${idx[n].length}</span>`; });
+  html+='</div><div id="charcards">';
+  if(window._char && idx[window._char]) idx[window._char].forEach(id=>{ html+=cardHTML(id,false); });
+  html+='</div>';
+  m.innerHTML=html; bindCards(m);
+  m.querySelectorAll('.chip').forEach(ch=>ch.addEventListener('click',()=>{ window._char=ch.dataset.n; renderCharacters(); }));
+}
+
+/* ---------- SEARCH ---------- */
+function renderSearch(){
+  const m=document.getElementById('main'); const q=query.toLowerCase();
+  const hits=Object.values(CH).filter(c=>c.title.toLowerCase().includes(q)||c.body.toLowerCase().includes(q)).slice(0,80);
+  let html=`<div class="legend">${hits.length} chapters matching “${esc(query)}”</div>`;
+  hits.forEach(c=>{ html+=cardHTML(c.id,false); });
+  m.innerHTML=html; bindCards(m);
+}
+
+function render(){
+  if(!DATA) return;
+  if(query.trim().length>1) return renderSearch();
+  if(view==='shelf')renderShelf(); else if(view==='storylines')renderStorylines(); else renderCharacters();
+}
+document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>{
+  view=b.dataset.v; query=''; document.getElementById('q').value='';
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b)); render();
+}));
+document.getElementById('q').addEventListener('input',e=>{query=e.target.value; render();});
+document.getElementById('export').addEventListener('click',()=>{
+  if(!DATA) return;
+  const out={version:DATA.version+' (edited by Clay '+new Date().toISOString().slice(0,10)+')', seed:DATA.seed, books:books};
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,1)],{type:'application/json'}));
+  a.download='books.json'; a.click();
+});
+document.getElementById('reset').addEventListener('click',()=>{
+  if(DATA && confirm('Discard local layout changes and restore the built-in composition?')){
+    localStorage.removeItem('library-canon-books'); books=JSON.parse(JSON.stringify(DATA.books)); markDirty(false); render();
+  }
+});
+
+function boot(data){
+  DATA=data; CH=DATA.chapters;
+  books=JSON.parse(JSON.stringify(DATA.books));
+  const saved=localStorage.getItem('library-canon-books');
+  if(saved){ try{ books=JSON.parse(saved); markDirty(true);}catch(e){} }
+  const h=location.hash.replace('#','');
+  if(['storylines','characters'].includes(h)){ view=h;
+    document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x.dataset.v===h)); }
+  if(h&&h.startsWith('char=')){ view='characters'; window._char=decodeURIComponent(h.slice(5));
+    document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x.dataset.v==='characters')); }
+  render();
+}
+
+/* ---------- boot: inline data (local build) or encrypted fetch (public site) ---------- */
+async function deriveKey(pw, salt){
+  const km=await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2', salt, iterations:310000, hash:'SHA-256'}, km,
+    {name:'AES-GCM', length:256}, false, ['decrypt']);
+}
+async function tryUnlock(pw){
+  const res=await fetch('data.enc',{cache:'no-store'}); if(!res.ok) throw new Error('data.enc not found');
+  const b=new Uint8Array(await res.arrayBuffer());
+  const key=await deriveKey(pw, b.slice(0,16));
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM', iv:b.slice(16,28)}, key, b.slice(28));
+  document.getElementById('lock').style.display='none';
+  boot(JSON.parse(new TextDecoder().decode(plain)));
+}
+let inline=null;
+try{ inline=JSON.parse(document.getElementById('data').textContent); }catch(e){}
+if(inline){ boot(inline); }
+else{
+  const lock=document.getElementById('lock'); lock.style.display='flex';
+  const go=async()=>{ try{ await tryUnlock(document.getElementById('pw').value); }
+    catch(err){ document.getElementById('lockerr').textContent='Wrong password (or the site has not been built yet).'; } };
+  document.getElementById('unlock').addEventListener('click',go);
+  document.getElementById('pw').addEventListener('keydown',e=>{ if(e.key==='Enter')go(); });
+}
+</script>
+</body>
+</html>
