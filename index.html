@@ -98,6 +98,16 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
 #modal .mbtns button.primary{background:var(--accent);border-color:var(--accent);color:#241d12}
 #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--accent);color:#241d12;
   padding:8px 20px;border-radius:4px;z-index:120;font-size:.85rem;display:none}
+#newcard{display:none;color:#241d12;background:var(--green);border-color:var(--green)}
+#composer{position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center}
+#composer .mbox{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px 22px;
+  width:min(780px,94vw);color:var(--cream)}
+#composer input,#composer select{background:#1c1510;border:1px solid var(--line);color:var(--cream);
+  padding:8px 10px;border-radius:3px;font-family:inherit;font-size:.9rem}
+#composer input{width:100%}
+#composer .crow{display:flex;gap:10px;margin:10px 0}
+#composer textarea{width:100%;min-height:46vh;background:#fffdf4;color:var(--ink);border:1px solid #cbbf9e;
+  border-radius:3px;font-family:Georgia,serif;font-size:.92rem;line-height:1.55;padding:12px}
 /* storyline & character views */
 .slhead{margin:24px 0 4px;font-size:1rem;letter-spacing:.1em;display:flex;gap:10px;align-items:baseline}
 .slhead .cnt{color:var(--dim);font-size:.75rem;font-family:'Courier New',monospace}
@@ -123,6 +133,7 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
   <input id="q" placeholder="search everything…">
   <div class="tools">
     <span id="dirty">unsaved layout · </span>
+    <button id="newcard">+ new card</button>
     <button id="savegh">Save layout</button>
     <button id="export">Export books.json</button>
     <button id="reset">Reset layout</button>
@@ -140,6 +151,15 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
     <button class="primary" id="m-save">Save token</button>
     <button id="m-clear">Forget token</button>
     <button id="m-close">Close</button>
+  </div>
+</div></div>
+<div id="composer"><div class="mbox">
+  <h3>NEW CARD</h3>
+  <div class="crow"><input id="c-title" placeholder="title"><select id="c-sl"></select></div>
+  <textarea id="c-body" placeholder="write…"></textarea>
+  <div class="mbtns">
+    <button class="primary" id="c-save">Save card</button>
+    <button id="c-cancel">Cancel</button>
   </div>
 </div></div>
 <div id="toast"></div>
@@ -190,11 +210,26 @@ function refreshEditUI(){
   document.getElementById('settings').textContent = TOKEN?'⚙ editing on':'⚙';
   document.getElementById('savegh').style.display =
     (TOKEN && document.getElementById('dirty').style.display!=='none')?'inline':'none';
+  document.getElementById('newcard').style.display = TOKEN?'inline':'none';
 }
 function editsOverlay(){ try{ return JSON.parse(localStorage.getItem('library-canon-edits')||'{}'); }catch(e){ return {}; } }
 function rememberEdit(id){ const ov=editsOverlay();
-  ov[id]={title:CH[id].title,body:CH[id].body,title_status:CH[id].title_status,ts:Date.now()};
+  ov[id]={full:{...CH[id]},ts:Date.now()};
   localStorage.setItem('library-canon-edits',JSON.stringify(ov)); }
+function slugify(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40)||'card'; }
+async function createChapter(title,storyline,body){
+  const now=new Date(), pad=n=>String(n).padStart(2,'0');
+  const stamp=`${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const id='web-'+stamp, path=`${id}-${slugify(title)}.md`;
+  const front=`---\nid: ${id}\ntitle: "${title.replace(/"/g,'\\"')}"\ntitle_status: clay\nstoryline: ${storyline}\nscene_code: WEB\nsource_doc: "written on the canon site ${now.toISOString().slice(0,10)}"\npassages: 1\ncharacters: []\nmaturity: sketch\nbooks: []\n---\n\n`;
+  const file=front+body.trim()+'\n';
+  await gh(`/repos/${REPO}/contents/chapters/${encodeURIComponent(path)}`,
+    {method:'PUT',body:JSON.stringify({message:'site new card: '+title,content:b64(encTxt(file))})});
+  CH[id]={id,path,title,title_status:'clay',storyline,characters:[],maturity:'sketch',
+    source:'written on the canon site',words:body.trim().split(/\s+/).length,body:body.trim()};
+  rememberEdit(id);
+  return id;
+}
 
 async function saveChapter(id,newTitle,newBody){
   const c=CH[id], api=`/repos/${REPO}/contents/chapters/${encodeURIComponent(c.path)}`;
@@ -308,6 +343,8 @@ function renderShelf(){
   Object.values(CH).filter(c=>!sh.has(c.id))
     .filter(c=>!trayFilter||c.storyline===trayFilter)
     .filter(c=>!trayQuery||c.title.toLowerCase().includes(trayQuery.toLowerCase()))
+    .sort((a,b)=>{ const aw=a.id.startsWith('web-'), bw=b.id.startsWith('web-');
+      return aw===bw ? (aw ? b.id.localeCompare(a.id) : 0) : (aw?-1:1); })
     .slice(0,140).forEach(c=>{ html+=cardHTML(c.id,true); });
   html+='</div></div></div>';
   m.innerHTML=html; bindCards(m);
@@ -402,14 +439,34 @@ document.getElementById('savegh').addEventListener('click',async()=>{
   const b=document.getElementById('savegh'); b.disabled=true;
   try{ await saveLayout(); } catch(e){ toast('Layout save failed: '+e.message,6000); }
   b.disabled=false; });
+document.getElementById('newcard').addEventListener('click',()=>{
+  const sel=document.getElementById('c-sl');
+  if(!sel.options.length) SLORDER.forEach(sl=>{ const o=document.createElement('option');
+    o.value=sl; o.textContent=SLNAME[sl]; if(sl==='VOICE')o.selected=true; sel.appendChild(o); });
+  document.getElementById('composer').style.display='flex';
+  document.getElementById('c-title').focus(); });
+document.getElementById('c-cancel').addEventListener('click',()=>{
+  document.getElementById('composer').style.display='none'; });
+document.getElementById('c-save').addEventListener('click',async()=>{
+  const t=document.getElementById('c-title').value.trim(), body=document.getElementById('c-body').value;
+  if(!t||!body.trim()){ toast('A card needs a title and some words.'); return; }
+  const b=document.getElementById('c-save'); b.disabled=true; b.textContent='Saving…';
+  try{
+    await createChapter(t, document.getElementById('c-sl').value, body);
+    document.getElementById('c-title').value=''; document.getElementById('c-body').value='';
+    document.getElementById('composer').style.display='none';
+    toast('Card saved. It is at the top of the Unshelved tray; drag it into a book whenever.');
+    render();
+  }catch(e){ toast('Save failed: '+e.message,6000); }
+  b.disabled=false; b.textContent='Save card'; });
 
 function boot(data){
   DATA=data; CH=DATA.chapters;
   // recent site edits shown immediately while the encrypted build catches up
   const ov=editsOverlay(), keep={}, now=Date.now();
   for(const [id,e] of Object.entries(ov)){
-    if(now-e.ts<15*60*1000 && CH[id]){ CH[id].title=e.title; CH[id].body=e.body;
-      CH[id].title_status=e.title_status; keep[id]=e; } }
+    if(now-e.ts>=15*60*1000 || !e.full) continue;
+    CH[id]=Object.assign(CH[id]||{}, e.full); keep[id]=e; }
   localStorage.setItem('library-canon-edits',JSON.stringify(keep));
   books=JSON.parse(JSON.stringify(DATA.books));
   const saved=localStorage.getItem('library-canon-books');
