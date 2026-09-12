@@ -199,10 +199,12 @@ async function saveToken(tok){
   TOKEN=tok; refreshEditUI();
 }
 async function loadToken(){
-  const j=localStorage.getItem('library-canon-token'); if(!j) return;
-  try{ const o=JSON.parse(j); const key=await deriveKey(PW,unb64(o.salt),['decrypt']);
-    TOKEN=decTxt(new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(o.iv)},key,unb64(o.ct))));
-  }catch(e){ localStorage.removeItem('library-canon-token'); }
+  const j=localStorage.getItem('library-canon-token');
+  if(j){
+    try{ const o=JSON.parse(j); const key=await deriveKey(PW,unb64(o.salt),['decrypt']);
+      TOKEN=decTxt(new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(o.iv)},key,unb64(o.ct))));
+    }catch(e){ localStorage.removeItem('library-canon-token'); }
+  }
   refreshEditUI();
 }
 function refreshEditUI(){
