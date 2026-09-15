@@ -54,6 +54,11 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
 .card .brk{text-align:center;letter-spacing:.5em;color:#8a7a58}
 .grip{cursor:grab;color:#a5926b;font-size:.8rem;user-select:none}
 .card.dragging{opacity:.4}
+.star{cursor:pointer;color:#b9a87f;font-size:.95rem;user-select:none;padding:0 2px}
+.star:hover{color:#8a6d3b}
+.star.on{color:#c98f1b}
+.dact{background:none;border:1px solid var(--line);color:var(--dim);padding:2px 10px;font-size:.7rem;
+  cursor:pointer;border-radius:3px;font-family:'Courier New',monospace;margin-left:6px}
 /* shelf */
 .book{background:var(--panel);border:1px solid var(--line);border-radius:6px;margin:14px 0;padding:10px 14px}
 .book>.bhead{display:flex;gap:10px;align-items:baseline;cursor:pointer}
@@ -129,12 +134,13 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
     <button data-v="shelf" class="on">Shelf</button>
     <button data-v="storylines">Storylines</button>
     <button data-v="characters">Characters</button>
+    <button data-v="drafts">Drafts</button>
   </nav>
   <input id="q" placeholder="search everything…">
   <div class="tools">
-    <span id="dirty">unsaved layout · </span>
+    <span id="dirty">unsaved changes · </span>
     <button id="newcard">+ new card</button>
-    <button id="savegh">Save layout</button>
+    <button id="savegh" title="Commit layout and draft changes to GitHub">Save changes</button>
     <button id="export">Export books.json</button>
     <button id="reset">Reset layout</button>
     <button id="settings" title="GitHub token for editing">⚙</button>
@@ -174,8 +180,9 @@ const SLNAME = {MOG:'Mog', SHALLA:'Shalla Shalla', AI:'Animal Intimacies', SNOG:
   WORLD:'World Doc', CHARACTERS:'Character Compendium', NONCORE:'Non-Core Storylines', VOICE:'Voice Notes (unplaced)'};
 const SLORDER = ['MOG','SHALLA','AI','SNOG','PB','SM','MOUTH','META','WORLD','CHARACTERS','NONCORE','VOICE'];
 
-let DATA=null, CH=null, books=null, PW=null, TOKEN=null;
+let DATA=null, CH=null, books=null, drafts=null, activeDraft=null, PW=null, TOKEN=null;
 let view='shelf', query='', trayQuery='', trayFilter=null, dragId=null;
+const dirtyFlags={books:false,drafts:false};
 const REPO='clayborneo/library-canon';
 
 function toast(msg,ms){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block';
@@ -254,11 +261,61 @@ async function saveChapter(id,newTitle,newBody){
 }
 async function saveLayout(){
   const api=`/repos/${REPO}/contents/structure/books.json`;
+  const snap=JSON.stringify(books); // edits made while the PUT is in flight must stay dirty
+  const out=JSON.stringify({version:DATA.version+' (edited on site)',seed:DATA.seed,books:JSON.parse(snap)},null,1)+'\n';
   const cur=await gh(api);
-  const out=JSON.stringify({version:DATA.version+' (edited on site)',seed:DATA.seed,books},null,1)+'\n';
   await gh(api,{method:'PUT',body:JSON.stringify({message:'site edit: book layout',content:b64(encTxt(out)),sha:cur.sha})});
-  localStorage.removeItem('library-canon-books'); markDirty(false); refreshEditUI();
+  if(JSON.stringify(books)===snap){ localStorage.removeItem('library-canon-books'); markDirty('books',false); }
+  refreshEditUI();
   toast('Layout saved to GitHub.');
+}
+async function saveDrafts(){
+  const api=`/repos/${REPO}/contents/structure/drafts.json`;
+  const snap=JSON.stringify(drafts);
+  const out=JSON.stringify({drafts:JSON.parse(snap)},null,1)+'\n';
+  let sha; try{ sha=(await gh(api)).sha; }
+  catch(e){ if(!/^GitHub 404/.test(e.message)) throw e; } // only a true not-found means create-new
+  const payload={message:'site edit: drafts',content:b64(encTxt(out))}; if(sha)payload.sha=sha;
+  await gh(api,{method:'PUT',body:JSON.stringify(payload)});
+  if(JSON.stringify(drafts)===snap){
+    localStorage.removeItem('library-canon-drafts');
+    // bridge the ~1-min rebake window: a reload before the site rebakes still sees the saved drafts
+    localStorage.setItem('library-canon-drafts-saved',JSON.stringify({ts:Date.now(),drafts:JSON.parse(snap)}));
+    markDirty('drafts',false);
+  }
+  refreshEditUI();
+  toast('Drafts saved to GitHub.');
+}
+
+/* ---------- drafts: star mechanism ---------- */
+function curDraft(){ return drafts.find(d=>d.id===activeDraft)||null; }
+function rememberDrafts(){ localStorage.setItem('library-canon-drafts',JSON.stringify(drafts)); markDirty('drafts',true); }
+function setActiveDraft(id){ activeDraft=id;
+  if(id) localStorage.setItem('library-canon-active-draft',id);
+  else localStorage.removeItem('library-canon-active-draft'); }
+function newDraft(){
+  const name=(prompt('Name the new draft (e.g. “Full Draft — Fall 2026”):')||'').trim();
+  if(!name) return null;
+  const d={id:'draft-'+Date.now(),name,created:new Date().toISOString().slice(0,10),chapters:[]};
+  drafts.push(d); setActiveDraft(d.id); rememberDrafts();
+  return d;
+}
+function refreshStars(){
+  const d=drafts&&curDraft();
+  document.querySelectorAll('.star').forEach(s=>{
+    const on=!!(d&&d.chapters.includes(s.dataset.id));
+    s.classList.toggle('on',on); s.textContent=on?'★':'☆';
+    s.title=on?'In draft “'+d.name+'” — click to remove':'Mark ready: add to the current draft';
+  });
+}
+function toggleStar(id){
+  let d=curDraft();
+  if(!d){ d=newDraft(); if(!d) return; }
+  const i=d.chapters.indexOf(id);
+  if(i>=0){ d.chapters.splice(i,1); toast('Removed from “'+d.name+'”.'); }
+  else{ d.chapters.push(id); toast('Added to “'+d.name+'” — '+d.chapters.length+' chapter'+(d.chapters.length===1?'':'s')+'.'); }
+  rememberDrafts();
+  if(view==='drafts' && !(query.trim().length>1)) renderDrafts(); else refreshStars();
 }
 
 function addEditBar(card){
@@ -287,8 +344,9 @@ function openEditor(card){
   });
 }
 
-function markDirty(on){ document.getElementById('dirty').style.display = on?'inline':'none'; refreshEditUI(); }
-function save(){ localStorage.setItem('library-canon-books', JSON.stringify(books)); markDirty(true); }
+function markDirty(kind,on){ dirtyFlags[kind]=on;
+  document.getElementById('dirty').style.display = (dirtyFlags.books||dirtyFlags.drafts)?'inline':'none'; refreshEditUI(); }
+function save(){ localStorage.setItem('library-canon-books', JSON.stringify(books)); markDirty('books',true); }
 function shelved(){ const s=new Set(); books.forEach(b=>b.chapters.forEach(c=>s.add(c))); return s; }
 function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 
@@ -306,10 +364,12 @@ function cardHTML(id, draggable){
   const col = SLCOLOR[c.storyline]||'#888';
   const ph = c.title_status==='placeholder' ? '<span class="ph" title="Claude placeholder title">°</span>' : '';
   const chars = (c.characters||[]).slice(0,4).join(', ');
+  const d = drafts&&curDraft(), st = !!(d&&d.chapters.includes(id));
   return `<div class="card" data-id="${id}" ${draggable?'draggable="true"':''} style="border-left-color:${col}">
     <div class="head">${draggable?'<span class="grip">⠿</span>':''}
       <span class="ttl">${esc(c.title)}${ph}</span>
-      <span class="meta">${c.storyline} · ${c.words}w · ${c.maturity}${chars?' · '+esc(chars):''}</span></div>
+      <span class="meta">${c.storyline} · ${c.words}w · ${c.maturity}${chars?' · '+esc(chars):''}</span>
+      <span class="star${st?' on':''}" data-id="${id}" title="${st?'In the current draft — click to remove':'Mark ready: add to the current draft'}">${st?'★':'☆'}</span></div>
     <div class="body" data-lazy="1"></div></div>`;
 }
 function bindCards(root){
@@ -322,6 +382,8 @@ function bindCards(root){
     c.addEventListener('dragstart',e=>{dragId=c.dataset.id;c.classList.add('dragging');});
     c.addEventListener('dragend',()=>{dragId=null;c.classList.remove('dragging');});
   });
+  root.querySelectorAll('.star').forEach(s=>s.addEventListener('click',e=>{
+    e.stopPropagation(); toggleStar(s.dataset.id); }));
 }
 function removeEverywhere(id){ books.forEach(b=>{ const i=b.chapters.indexOf(id); if(i>=0)b.chapters.splice(i,1); }); }
 
@@ -396,6 +458,51 @@ function renderCharacters(){
   m.querySelectorAll('.chip').forEach(ch=>ch.addEventListener('click',()=>{ window._char=ch.dataset.n; renderCharacters(); }));
 }
 
+/* ---------- DRAFTS ---------- */
+function renderDrafts(){
+  const m=document.getElementById('main');
+  let html='<div class="legend">A draft is a reading list for the next full version: star ☆ a chapter in any view and it lands in the draft selected here. Nothing moves — starred chapters stay on the Shelf and everywhere else. Drag to set the draft\'s running order.</div>';
+  html+='<div id="trayfilters" style="margin-bottom:14px">';
+  drafts.forEach(d=>{ html+=`<span class="chip${d.id===activeDraft?' on':''}" data-d="${d.id}">${esc(d.name)} · ${d.chapters.length}</span>`; });
+  html+='<span class="chip" data-d="__new" style="border-style:dashed">+ new draft</span></div>';
+  const d=curDraft();
+  if(!d){ html+='<div class="legend">No drafts yet. Make one, then go star what feels ready.</div>'; }
+  else{
+    const wc=d.chapters.reduce((a,c)=>a+(CH[c]?CH[c].words:0),0);
+    html+=`<div class="book open"><div class="bhead" style="cursor:default"><span class="btitle">${esc(d.name)}</span>
+      <span class="bnote">started ${esc(d.created||'')}</span>
+      <span class="bcount">${d.chapters.length} ch · ${Math.round(wc/1000)}k words</span>
+      <button class="dact" id="d-ren">rename</button><button class="dact" id="d-del">delete draft</button></div><div class="chlist">`;
+    if(!d.chapters.length) html+='<div class="legend" style="margin:10px 0">Empty so far — the stars on the other tabs feed this list.</div>';
+    html+=`<div class="dropzone" data-i="0"></div>`;
+    d.chapters.forEach((cid,ci)=>{ html+=cardHTML(cid,true)+`<div class="dropzone" data-i="${ci+1}"></div>`; });
+    html+='</div></div>';
+  }
+  m.innerHTML=html; bindCards(m);
+  m.querySelectorAll('.chip').forEach(ch=>ch.addEventListener('click',()=>{
+    if(ch.dataset.d==='__new'){ if(newDraft()) renderDrafts(); return; }
+    setActiveDraft(ch.dataset.d); renderDrafts(); }));
+  if(d){
+    document.getElementById('d-ren').addEventListener('click',()=>{
+      const name=(prompt('New name for this draft:',d.name)||'').trim();
+      if(name){ d.name=name; rememberDrafts(); renderDrafts(); } });
+    document.getElementById('d-del').addEventListener('click',()=>{
+      if(!confirm('Delete draft “'+d.name+'”? The chapters themselves are untouched.')) return;
+      drafts.splice(drafts.indexOf(d),1);
+      setActiveDraft(drafts.length?drafts[0].id:null);
+      rememberDrafts(); renderDrafts(); });
+    m.querySelectorAll('.dropzone').forEach(z=>{
+      z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('hot');});
+      z.addEventListener('dragleave',()=>z.classList.remove('hot'));
+      z.addEventListener('drop',e=>{ e.preventDefault(); z.classList.remove('hot'); if(!dragId)return;
+        const i=+z.dataset.i, arr=d.chapters;
+        const before=arr.slice(0,i).filter(c=>c!==dragId).length;
+        const old=arr.indexOf(dragId); if(old>=0)arr.splice(old,1);
+        arr.splice(before,0,dragId); rememberDrafts(); renderDrafts(); });
+    });
+  }
+}
+
 /* ---------- SEARCH ---------- */
 function renderSearch(){
   const m=document.getElementById('main'); const q=query.toLowerCase();
@@ -408,7 +515,8 @@ function renderSearch(){
 function render(){
   if(!DATA) return;
   if(query.trim().length>1) return renderSearch();
-  if(view==='shelf')renderShelf(); else if(view==='storylines')renderStorylines(); else renderCharacters();
+  if(view==='shelf')renderShelf(); else if(view==='storylines')renderStorylines();
+  else if(view==='drafts')renderDrafts(); else renderCharacters();
 }
 document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>{
   view=b.dataset.v; query=''; document.getElementById('q').value='';
@@ -424,7 +532,7 @@ document.getElementById('export').addEventListener('click',()=>{
 });
 document.getElementById('reset').addEventListener('click',()=>{
   if(DATA && confirm('Discard local layout changes and restore the built-in composition?')){
-    localStorage.removeItem('library-canon-books'); books=JSON.parse(JSON.stringify(DATA.books)); markDirty(false); render();
+    localStorage.removeItem('library-canon-books'); books=JSON.parse(JSON.stringify(DATA.books)); markDirty('books',false); render();
   }
 });
 document.getElementById('settings').addEventListener('click',()=>{ document.getElementById('modal').style.display='flex'; });
@@ -439,7 +547,10 @@ document.getElementById('m-save').addEventListener('click',async()=>{
   catch(e){ toast('Could not store token: '+e.message,6000); } });
 document.getElementById('savegh').addEventListener('click',async()=>{
   const b=document.getElementById('savegh'); b.disabled=true;
-  try{ await saveLayout(); } catch(e){ toast('Layout save failed: '+e.message,6000); }
+  try{
+    if(dirtyFlags.books) await saveLayout();
+    if(dirtyFlags.drafts) await saveDrafts();
+  } catch(e){ toast('Save failed: '+e.message,6000); }
   b.disabled=false; });
 document.getElementById('newcard').addEventListener('click',()=>{
   const sel=document.getElementById('c-sl');
@@ -472,9 +583,18 @@ function boot(data){
   localStorage.setItem('library-canon-edits',JSON.stringify(keep));
   books=JSON.parse(JSON.stringify(DATA.books));
   const saved=localStorage.getItem('library-canon-books');
-  if(saved){ try{ books=JSON.parse(saved); markDirty(true);}catch(e){} }
+  if(saved){ try{ const p=JSON.parse(saved); if(Array.isArray(p)){ books=p; markDirty('books',true); } }catch(e){} }
+  drafts=JSON.parse(JSON.stringify(DATA.drafts||[]));
+  try{ const sv=JSON.parse(localStorage.getItem('library-canon-drafts-saved')||'null');
+    if(sv&&Array.isArray(sv.drafts)&&Date.now()-sv.ts<15*60*1000) drafts=sv.drafts;
+    else localStorage.removeItem('library-canon-drafts-saved');
+  }catch(e){}
+  const dsaved=localStorage.getItem('library-canon-drafts');
+  if(dsaved){ try{ const p=JSON.parse(dsaved); if(Array.isArray(p)){ drafts=p; markDirty('drafts',true); } }catch(e){} }
+  activeDraft=localStorage.getItem('library-canon-active-draft');
+  if(!drafts.some(d=>d.id===activeDraft)) activeDraft=drafts.length?drafts[0].id:null;
   const h=location.hash.replace('#','');
-  if(['storylines','characters'].includes(h)){ view=h;
+  if(['storylines','characters','drafts'].includes(h)){ view=h;
     document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x.dataset.v===h)); }
   if(h&&h.startsWith('char=')){ view='characters'; window._char=decodeURIComponent(h.slice(5));
     document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x.dataset.v==='characters')); }
