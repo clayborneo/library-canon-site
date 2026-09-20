@@ -840,6 +840,11 @@ function bindCards(root){
   root.querySelectorAll('.star').forEach(s=>s.addEventListener('click',e=>{
     e.stopPropagation(); toggleStar(s.dataset.id); }));
 }
+// Cards drag by their header only. A draggable card swallows mouse drags that start anywhere inside it,
+// which made it impossible to select text in an open card or in the editor by dragging from blank space.
+document.addEventListener('mousedown',e=>{
+  const card=e.target.closest&&e.target.closest('.card[draggable]');
+  if(card) card.setAttribute('draggable', e.target.closest('.body')?'false':'true'); });
 function removeEverywhere(id){ books.forEach(b=>{ const i=b.chapters.indexOf(id); if(i>=0)b.chapters.splice(i,1); }); }
 
 /* ---------- SHELF ---------- */
