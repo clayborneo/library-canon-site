@@ -825,7 +825,7 @@ function renderText(text, mark){
   }).join('');
 }
 const DIRECTION=/^\[[^\]]*\]$/;
-function isSpeaker(l){ l=l.replace(/’s\b/g,''); return l.length<=50 && /^[A-Z][A-Z0-9 ’'.,&()\-]*$/.test(l) && /[A-Z].*[A-Z]/.test(l); }
+function isSpeaker(l){ l=l.replace(/’s\b/g,''); return l.length<=50 && /^[A-Z][A-Z0-9 ’'.,&()\/\-]*$/.test(l) && /[A-Z].*[A-Z]/.test(l); }
 // the Docs export marks emphasis with asterisks; show it as emphasis (the stored text keeps the asterisks)
 function emph(h){ return h.replace(/\*\*\*([^*]+)\*\*\*/g,'<b><i>$1</i></b>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/\*([^*\n]+)\*/g,'<i>$1</i>'); }
 function normPara(p){ return p.replace(/\s+/g,' ').trim(); }
