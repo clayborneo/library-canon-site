@@ -59,6 +59,19 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
 .star.on{color:#c98f1b}
 .dact{background:none;border:1px solid var(--line);color:var(--dim);padding:2px 10px;font-size:.7rem;
   cursor:pointer;border-radius:3px;font-family:'Courier New',monospace;margin-left:6px}
+/* working drafts (forks) */
+.badge{font-size:.6rem;border:1px solid;border-radius:8px;padding:0 6px;font-family:'Courier New',monospace;white-space:nowrap}
+.badge.ed{color:#8a5a12;border-color:#c9a25a;background:#f7e6bd}
+.badge.sc{color:#2c5f86;border-color:#8fb3cf;background:#e2eef6}
+.badge.own{color:#2f6b3d;border-color:#8fc29b;background:#e3f2e6}
+.editbar{flex-wrap:wrap}
+.editbar .sep{flex:1}
+.editbar button.warn{border-color:#b5523f;color:#8f3a2a}
+.cmp{margin:12px 0 4px;padding:6px 14px 10px;background:#e9efe2;border:1px solid #c3cfb4;border-radius:4px}
+.cmp h4{margin:6px 0;font-size:.7rem;font-weight:normal;letter-spacing:.08em;color:#4d6240;font-family:'Courier New',monospace}
+.card .body p.gone{background:#f6d9d2}
+.card .body p.fresh{background:#dcefd6}
+.card.cutcard{opacity:.75}
 /* shelf */
 .book{background:var(--panel);border:1px solid var(--line);border-radius:6px;margin:14px 0;padding:10px 14px}
 .book>.bhead{display:flex;gap:10px;align-items:baseline;cursor:pointer}
@@ -140,7 +153,7 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
   <div class="tools">
     <span id="dirty">unsaved changes · </span>
     <button id="newcard">+ new card</button>
-    <button id="savegh" title="Commit layout and draft changes to GitHub">Save changes</button>
+    <button id="savegh" title="Commit layout, draft and working-draft changes to GitHub">Save changes</button>
     <button id="export">Export books.json</button>
     <button id="reset">Reset layout</button>
     <button id="settings" title="GitHub token for editing">⚙</button>
@@ -181,8 +194,11 @@ const SLNAME = {MOG:'Mog', SHALLA:'Shalla Shalla', AI:'Animal Intimacies', SNOG:
 const SLORDER = ['MOG','SHALLA','AI','SNOG','PB','SM','MOUTH','META','WORLD','CHARACTERS','NONCORE','VOICE'];
 
 let DATA=null, CH=null, books=null, drafts=null, activeDraft=null, PW=null, TOKEN=null;
+let forks=null, activeFork=null, forkFilter='all', composerTarget=null;
+let forkLock=false; // one repo-writing action at a time
+const forkCards={}, forkBaked={}, forkRepoText=new Map(), dirtyForkIds=new Set();
 let view='shelf', query='', trayQuery='', trayFilter=null, dragId=null;
-const dirtyFlags={books:false,drafts:false};
+const dirtyFlags={books:false,drafts:false,forks:false};
 const REPO='clayborneo/library-canon';
 
 function toast(msg,ms){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block';
@@ -193,7 +209,7 @@ const encTxt=s=>new TextEncoder().encode(s);
 const decTxt=u=>new TextDecoder().decode(u);
 
 async function gh(path, opts={}){
-  const r=await fetch('https://api.github.com'+path,{...opts,
+  const r=await fetch('https://api.github.com'+path,{cache:'no-store',...opts,
     headers:{'Authorization':'Bearer '+TOKEN,'Accept':'application/vnd.github+json',...(opts.headers||{})}});
   if(!r.ok) throw new Error('GitHub '+r.status+': '+(await r.text()).slice(0,180));
   return r.json();
@@ -253,7 +269,8 @@ async function saveChapter(id,newTitle,newBody){
                .replace(/^title_status: .*$/m,'title_status: clay');
   }
   const file=front+newBody.trim()+'\n';
-  await gh(api,{method:'PUT',body:JSON.stringify({message:'site edit: '+newTitle,content:b64(encTxt(file)),sha:cur.sha})});
+  const put=await gh(api,{method:'PUT',body:JSON.stringify({message:'site edit: '+newTitle,content:b64(encTxt(file)),sha:cur.sha})});
+  c.blob=put.content&&put.content.sha;
   c.title=newTitle; c.body=newBody.trim(); c.words=c.body.split(/\s+/).length;
   if(titleChanged) c.title_status='clay';
   rememberEdit(id);
@@ -318,6 +335,440 @@ function toggleStar(id){
   if(view==='drafts' && !(query.trim().length>1)) renderDrafts(); else refreshStars();
 }
 
+/* ---------- working drafts (forks): private copies of a draft's chapters ---------- */
+// Repo layout: forks/<id>/fork.json (manifest: running order, cutting room, each card's source
+// chapter + base_blob) and forks/<id>/cards/*.md (the copies). Canon chapters are only ever
+// touched by pushToSource, behind a confirm.
+const FRESH_MS=15*60*1000;
+function lsGet(k,def){ try{ const v=JSON.parse(localStorage.getItem(k)||'null'); return v==null?def:v; }catch(e){ return def; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+function getFork(id){ return forks.find(f=>f.id===id)||null; }
+function forkEntry(f,key){ return f.cards.find(e=>e.key===key)||f.cut.find(e=>e.key===key)||null; }
+function wordCount(t){ return t.split(/\s+/).filter(Boolean).length; }
+function manifestText(f){
+  const ent=e=>({key:e.key,file:e.file,source:e.source||null,base_blob:e.base_blob||null});
+  return JSON.stringify({id:f.id,name:f.name,created:f.created,from_draft:f.from_draft||null,
+    cards:f.cards.map(ent),cut:f.cut.map(ent)},null,1)+'\n';
+}
+function setActiveFork(id){ activeFork=id; forkFilter='all';
+  if(id) localStorage.setItem('library-canon-active-fork',id);
+  else localStorage.removeItem('library-canon-active-fork'); }
+function persistDirtyForks(){ const o={}; dirtyForkIds.forEach(id=>{ const f=getFork(id); if(f) o[id]=f; });
+  lsSet('library-canon-forks',o); }
+function rememberFork(f){ dirtyForkIds.add(f.id); persistDirtyForks(); markDirty('forks',true); }
+// the manifest text `snap` is now in the repo: clear dirty (unless edited mid-flight) and bridge the rebake window
+function forkSaved(f,snap,extra){
+  if(manifestText(f)===snap) dirtyForkIds.delete(f.id);
+  persistDirtyForks();
+  const b=lsGet('library-canon-forks-saved',{}), old=b[f.id]||{};
+  b[f.id]={...old,ts:Date.now(),manifest:JSON.parse(snap),seen:[...(old.seen||[]),h32(forkRepoText.get(f.id)||'none')].slice(-20),...(extra||{})};
+  lsSet('library-canon-forks-saved',b);
+  forkRepoText.set(f.id,snap);
+  markDirty('forks',dirtyForkIds.size>0);
+}
+// the repo's fork.json must still be the one this page last saw
+async function manifestUnchanged(f){
+  const known=forkRepoText.get(f.id); if(known==null) return;
+  let cur=null; try{ cur=await readRepoFile(`forks/${f.id}/fork.json`); }catch(e){ if(!/^GitHub 404/.test(e.message)) throw e; }
+  if(!cur || manifestText({cut:[],...JSON.parse(cur.text)})!==known){
+    const err=new Error('this working draft was changed somewhere else since this page loaded. Reload to pick that up, then redo this'); err.stale=true; throw err; }
+}
+function h32(s){ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))|0; return (h>>>0).toString(36)+'.'+s.length.toString(36); }
+function cardSig(c){ return c?h32(c.title+'\n'+c.body):'none'; }
+// An overlay entry remembers every version it replaced (seen). At load it applies only while the
+// built site still shows one of those; if the build shows anything else, someone else got there first.
+function rememberForkCard(fid,key){ const ov=lsGet('library-canon-fork-edits',{}), now=Date.now();
+  for(const id of Object.keys(ov)){ for(const k of Object.keys(ov[id])) if(now-ov[id][k].ts>=FRESH_MS) delete ov[id][k]; }
+  const prev=(ov[fid]||{})[key];
+  const seen=prev?[...(prev.seen||[]),cardSig(prev.card)].slice(-20):[(forkBaked[fid]||{})[key]||'none'];
+  (ov[fid]=ov[fid]||{})[key]={card:{...forkCards[fid][key]},ts:now,seen};
+  lsSet('library-canon-fork-edits',ov); }
+function copyOfSource(e,s){ return {key:e.key,file:e.file,source:e.source,title:s.title,title_status:s.title_status,
+  storyline:s.storyline,characters:s.characters,maturity:s.maturity,words:s.words,body:s.body,
+  draft_changed:false,src_changed:false}; }
+async function ensureFork(id){
+  if(forkCards[id]) return forkCards[id];
+  const f=getFork(id); let cards=null;
+  if(DATA.fork_cards&&DATA.fork_cards[id]) cards=JSON.parse(JSON.stringify(DATA.fork_cards[id]));
+  else if(PW){
+    try{ const res=await fetch(id+'.enc',{cache:'no-store'});
+      if(res.ok) cards=JSON.parse(decTxt(await decryptBytes(PW,new Uint8Array(await res.arrayBuffer())))); }catch(e){}
+  }
+  if(!cards){
+    const b=lsGet('library-canon-forks-saved',{})[id];
+    if(!(b&&b.freshTs&&Date.now()-b.freshTs<FRESH_MS))
+      throw new Error('This working draft has not been built into the site yet. Give it a minute, then reload.');
+    cards={}; // forked minutes ago in this browser, not baked yet: every copy still equals its source
+    [...f.cards,...f.cut].forEach(e=>{ const s=e.source&&CH[e.source]; if(s) cards[e.key]=copyOfSource(e,s); });
+  }
+  // recent edits shown immediately while the encrypted build catches up
+  const ov=lsGet('library-canon-fork-edits',{}), keep={};
+  forkBaked[id]={}; for(const k of Object.keys(cards)) forkBaked[id][k]=cardSig(cards[k]);
+  for(const [k,e] of Object.entries(ov[id]||{})){
+    const built=forkBaked[id][k]||'none';
+    if(Date.now()-e.ts<FRESH_MS && built!==cardSig(e.card) && (e.seen||[]).includes(built)){ cards[k]=e.card; keep[k]=e; } }
+  if(Object.keys(keep).length) ov[id]=keep; else delete ov[id];
+  lsSet('library-canon-fork-edits',ov);
+  return forkCards[id]=cards;
+}
+// how a draft card stands against its canon source, judged on title + body
+function forkState(c){
+  if(!c.source) return 'own';
+  const s=CH[c.source]; if(!s) return 'orphan';
+  if(c.title===s.title && c.body===s.body) return 'same';
+  if(c.draft_changed && c.src_changed) return 'both';
+  return c.src_changed?'source':'edited';
+}
+
+/* git plumbing */
+async function gitBlobSha(text){
+  const body=encTxt(text), head=encTxt('blob '+body.length+'\0');
+  const all=new Uint8Array(head.length+body.length); all.set(head); all.set(body,head.length);
+  return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-1',all)),x=>x.toString(16).padStart(2,'0')).join('');
+}
+// One atomic commit on main. entries: {path,content} writes, {path,sha} points at an existing blob, {path,sha:null} deletes.
+async function commitFiles(message,entries){
+  {
+    const head=(await gh(`/repos/${REPO}/git/ref/heads/main`)).object.sha;
+    const base=(await gh(`/repos/${REPO}/git/commits/${head}`)).tree.sha;
+    const tree=await gh(`/repos/${REPO}/git/trees`,{method:'POST',body:JSON.stringify({base_tree:base,
+      tree:entries.map(e=>({path:e.path,mode:'100644',type:'blob',...(e.sha!==undefined?{sha:e.sha}:{content:e.content})}))})});
+    const c=await gh(`/repos/${REPO}/git/commits`,{method:'POST',body:JSON.stringify({message,tree:tree.sha,parents:[head]})});
+    // not forced: if main moved in the meantime this fails and nothing is written. Never replayed blindly.
+    await gh(`/repos/${REPO}/git/refs/heads/main`,{method:'PATCH',body:JSON.stringify({sha:c.sha})}); return c;
+  }
+}
+async function readRepoFile(path){
+  const cur=await gh(`/repos/${REPO}/contents/${path.split('/').map(encodeURIComponent).join('/')}`);
+  return {sha:cur.sha,text:decTxt(unb64(cur.content))};
+}
+function splitCard(text){ const m=text.match(/^---\n[\s\S]*?\n---\n\s*/);
+  if(!m) throw new Error('frontmatter not found');
+  return {front:m[0],body:text.slice(m[0].length).trim()}; }
+function frontField(front,k){ const m=front.match(new RegExp('^'+k+': (.*)$','m')); return m?m[1].trim().replace(/^"+|"+$/g,'').replace(/\\"/g,'"'):''; }
+function setTitle(front,t){
+  return front.replace(/^title: .*$/m,()=>'title: "'+t.replace(/"/g,'\\"')+'"').replace(/^title_status: .*$/m,'title_status: clay'); }
+// refuse to build on stale text: the repo copy must still read the way this page shows it
+function sameOrStale(p,c){ if(p.body!==c.body || frontField(p.front,'title')!==c.title) throw new Error('this card was changed somewhere else since this page loaded. Copy anything you just typed, reload, then redo the edit'); }
+function forkCardPath(f,file){ return `forks/${f.id}/cards/${file}`; }
+function newForkKey(f){
+  const now=new Date(), pad=n=>String(n).padStart(2,'0');
+  let k=`new-${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  while(forkEntry(f,k)) k+='x';
+  return k;
+}
+// run a commit that changes the manifest; put the manifest back if the commit fails
+async function withManifest(f,mutate,commit){
+  const before={cards:f.cards.slice(),cut:f.cut.slice(),blobs:[...f.cards,...f.cut].map(e=>[e,e.base_blob])};
+  try{ await manifestUnchanged(f); await mutate(); const snap=manifestText(f);
+    await commit({path:`forks/${f.id}/fork.json`,content:snap},snap); forkSaved(f,snap); }
+  catch(err){ f.cards=before.cards; f.cut=before.cut; before.blobs.forEach(([e,b])=>e.base_blob=b); throw err; }
+}
+
+async function forkDraft(d){
+  const name=(prompt('Name the working draft. It gets its own private copy of every chapter in “'+d.name+'”:',d.name+' — working copy')||'').trim();
+  if(!name) return;
+  toast('Forking '+d.chapters.length+' chapters…',60000);
+  const head=(await gh(`/repos/${REPO}/git/ref/heads/main`)).object.sha;
+  const rootSha=(await gh(`/repos/${REPO}/git/commits/${head}`)).tree.sha;
+  const chDir=(await gh(`/repos/${REPO}/git/trees/${rootSha}`)).tree.find(t=>t.path==='chapters');
+  const blobs={}; (await gh(`/repos/${REPO}/git/trees/${chDir.sha}`)).tree.forEach(t=>{ blobs[t.path]=t.sha; });
+  const f={id:'fork-'+Date.now(),name,created:new Date().toISOString().slice(0,10),from_draft:d.id,cards:[],cut:[]};
+  const entries=[], cards={}, skipped=[];
+  const behind=d.chapters.filter(cid=>CH[cid]&&CH[cid].blob&&blobs[CH[cid].path]&&blobs[CH[cid].path]!==CH[cid].blob);
+  if(behind.length) throw new Error('the repo has newer text than this page for '+behind.length+' of these chapters ('+behind.slice(0,3).join(', ')+'…). Reload in a minute, then fork');
+  d.chapters.forEach(cid=>{ const c=CH[cid], sha=c&&blobs[c.path];
+    if(!sha){ skipped.push(cid); return; }
+    const e={key:cid,file:c.path,source:cid,base_blob:sha};
+    f.cards.push(e); cards[cid]=copyOfSource(e,c);
+    entries.push({path:forkCardPath(f,c.path),sha}); }); // same blob as the source: nothing to upload
+  const snap=manifestText(f);
+  entries.push({path:`forks/${f.id}/fork.json`,content:snap});
+  await commitFiles('fork draft into working draft: '+name,entries);
+  forks.push(f); forkCards[f.id]=cards; forkSaved(f,snap,{freshTs:Date.now()}); setActiveFork(f.id);
+  toast('Working draft ready: '+f.cards.length+' private copies.'+(skipped.length?' Skipped (not in the repo yet): '+skipped.join(', '):''),6000);
+  renderDrafts();
+}
+async function deleteFork(f){
+  await manifestUnchanged(f);
+  const n=f.cards.length+f.cut.length;
+  if(!confirm('Delete the working draft “'+f.name+'” and its '+n+' private card copies?\n\nCanon cards are untouched. The copies survive only in the git history.')) return;
+  const paths=[...f.cards,...f.cut].map(e=>forkCardPath(f,e.file)).concat(`forks/${f.id}/fork.json`);
+  await commitFiles('delete working draft: '+f.name,paths.map(p=>({path:p,sha:null})));
+  forks.splice(forks.indexOf(f),1); delete forkCards[f.id]; dirtyForkIds.delete(f.id); persistDirtyForks();
+  const b=lsGet('library-canon-forks-saved',{}); b[f.id]={ts:Date.now(),deleted:true}; lsSet('library-canon-forks-saved',b);
+  markDirty('forks',dirtyForkIds.size>0); setActiveFork(null); toast('Working draft deleted.'); renderDrafts();
+}
+async function saveForks(){
+  for(const id of [...dirtyForkIds]){ const f=getFork(id); if(!f){ dirtyForkIds.delete(id); continue; }
+    const snap=manifestText(f);
+    try{ await manifestUnchanged(f); }
+    catch(err){ if(!err.stale) throw err;
+      if(confirm('“'+f.name+'” was changed somewhere else since this page loaded, so your unsaved reordering / cuts here cannot be saved on top of it.\n\nDiscard them and reload?')){
+        dirtyForkIds.delete(id); persistDirtyForks(); location.reload(); }
+      throw err; }
+    await commitFiles('working draft layout: '+f.name,[{path:`forks/${id}/fork.json`,content:snap}]);
+    forkSaved(f,snap); }
+  persistDirtyForks(); markDirty('forks',dirtyForkIds.size>0);
+  toast('Working drafts saved to GitHub.');
+}
+async function saveForkCard(f,key,newTitle,newBody){
+  const c=forkCards[f.id][key], path=forkCardPath(f,c.file), cur=await readRepoFile(path);
+  const p=splitCard(cur.text), titleChanged=newTitle!==c.title;
+  sameOrStale(p,c);
+  const file=(titleChanged?setTitle(p.front,newTitle):p.front)+newBody.trim()+'\n';
+  await gh(`/repos/${REPO}/contents/${path.split('/').map(encodeURIComponent).join('/')}`,
+    {method:'PUT',body:JSON.stringify({message:'working draft edit: '+newTitle,content:b64(encTxt(file)),sha:cur.sha})});
+  if(titleChanged) c.title_status='clay';
+  c.title=newTitle; c.body=newBody.trim(); c.words=wordCount(c.body); c.draft_changed=true;
+  rememberForkCard(f.id,key);
+}
+async function splitForkCard(f,key,title,text,pos){
+  const first=text.slice(0,pos).trim(), second=text.slice(pos).trim();
+  if(!first||!second) throw new Error('put the cursor where the second card should begin');
+  const t2=(prompt('Title for the second card:',title+' (cont.)')||'').trim(); if(!t2) return null;
+  const c=forkCards[f.id][key], path=forkCardPath(f,c.file), p=splitCard((await readRepoFile(path)).text);
+  sameOrStale(p,c);
+  const nk=newForkKey(f), nfile=nk+'-'+slugify(t2)+'.md';
+  const front2=setTitle(p.front,t2).replace(/^id: .*$/m,()=>'id: '+nk);
+  await withManifest(f,()=>{ const i=f.cards.findIndex(e=>e.key===key);
+      f.cards.splice(i+1,0,{key:nk,file:nfile,source:null,base_blob:null}); },
+    man=>commitFiles('working draft split: '+title,[{path,content:(title!==c.title?setTitle(p.front,title):p.front)+first+'\n'},
+      {path:forkCardPath(f,nfile),content:front2+second+'\n'},man]));
+  if(title!==c.title) c.title_status='clay';
+  c.title=title; c.body=first; c.words=wordCount(first); c.draft_changed=true;
+  forkCards[f.id][nk]={...c,key:nk,file:nfile,source:null,title:t2,title_status:'clay',body:second,words:wordCount(second),
+    draft_changed:false,src_changed:false};
+  rememberForkCard(f.id,key); rememberForkCard(f.id,nk);
+  return nk;
+}
+async function mergeNextForkCard(f,key){
+  const i=f.cards.findIndex(e=>e.key===key), n=f.cards[i+1];
+  if(i<0||!n) throw new Error('there is no card after this one');
+  const a=forkCards[f.id][key], b=forkCards[f.id][n.key];
+  if(!b) throw new Error('the next card is still building');
+  if(!confirm('Merge “'+b.title+'” onto the end of “'+a.title+'”?\n\nThe second card moves to the cutting room, so nothing is lost.')) return false;
+  const path=forkCardPath(f,a.file), p=splitCard((await readRepoFile(path)).text), body=a.body+'\n\n'+b.body;
+  sameOrStale(p,a);
+  await withManifest(f,()=>{ f.cards.splice(i+1,1); f.cut.unshift(n); },
+    man=>commitFiles('working draft merge: '+a.title,[{path,content:p.front+body+'\n'},man]));
+  a.body=body; a.words=wordCount(body); a.draft_changed=true; rememberForkCard(f.id,key);
+  return true;
+}
+async function createForkCard(f,afterKey,title,storyline,body){
+  const nk=newForkKey(f), file=nk+'-'+slugify(title)+'.md', today=new Date().toISOString().slice(0,10);
+  const front=`---\nid: ${nk}\ntitle: "${title.replace(/"/g,'\\"')}"\ntitle_status: clay\nstoryline: ${storyline}\nscene_code: DRAFT\nsource_doc: "written in a working draft on the canon site ${today}"\npassages: 1\ncharacters: []\nmaturity: sketch\nbooks: []\n---\n\n`;
+  await withManifest(f,()=>{ const i=afterKey?f.cards.findIndex(e=>e.key===afterKey):-1;
+      f.cards.splice(i+1,0,{key:nk,file,source:null,base_blob:null}); },
+    man=>commitFiles('working draft new card: '+title,[{path:forkCardPath(f,file),content:front+body.trim()+'\n'},man]));
+  forkCards[f.id][nk]={key:nk,file,source:null,title,title_status:'clay',storyline,characters:[],maturity:'sketch',
+    words:wordCount(body),body:body.trim(),draft_changed:false,src_changed:false};
+  rememberForkCard(f.id,nk);
+  return nk;
+}
+async function pushToSource(f,key){
+  const c=forkCards[f.id][key], e=forkEntry(f,key), s=CH[c.source];
+  if(!confirm('Overwrite the CANON card “'+s.title+'” ('+s.words+' words) with this draft version ('+c.words+' words)?\n\nThis changes the source card everywhere on the site. Its old text stays in the git history.')) return false;
+  const p=splitCard((await readRepoFile('chapters/'+s.path)).text);
+  const file=(c.title!==frontField(p.front,'title')?setTitle(p.front,c.title):p.front)+c.body+'\n';
+  const sha=await gitBlobSha(file);
+  await withManifest(f,()=>{ e.base_blob=sha; },
+    man=>commitFiles('push working-draft card to canon: '+c.title,[{path:'chapters/'+s.path,content:file},man]));
+  if(c.title!==s.title) s.title_status='clay';
+  s.title=c.title; s.body=c.body; s.words=c.words; s.blob=sha; rememberEdit(c.source);
+  c.draft_changed=false; c.src_changed=false; rememberForkCard(f.id,key);
+  return true;
+}
+async function pullFromSource(f,key){
+  const c=forkCards[f.id][key], e=forkEntry(f,key), s=CH[c.source];
+  if(!confirm('Replace this draft card with the current canon text of “'+s.title+'”?\n\nYour draft edits to this one card are dropped (the git history keeps them).')) return false;
+  const cur=await readRepoFile('chapters/'+s.path), p=splitCard(cur.text);
+  await withManifest(f,()=>{ e.base_blob=cur.sha; }, // the copy becomes the very same blob as the source again
+    man=>commitFiles('pull canon into working-draft card: '+s.title,[{path:forkCardPath(f,c.file),sha:cur.sha},man]));
+  s.title=frontField(p.front,'title')||s.title; s.body=p.body; s.words=wordCount(p.body); s.blob=cur.sha;
+  Object.assign(c,{title:s.title,title_status:frontField(p.front,'title_status'),body:s.body,words:s.words,
+    draft_changed:false,src_changed:false});
+  rememberForkCard(f.id,key);
+  return true;
+}
+
+/* working-draft view */
+function forkHeadInner(c,cut){
+  const st=forkState(c), ph=c.title_status==='placeholder'?'<span class="ph" title="Claude placeholder title">°</span>':'';
+  const badge={own:'<span class="badge own">draft only</span>',edited:'<span class="badge ed">edited</span>',
+    source:'<span class="badge sc">source changed</span>',orphan:'<span class="badge sc">source gone</span>',
+    both:'<span class="badge ed">edited</span><span class="badge sc">source changed</span>',same:''}[st];
+  return `${cut?'':'<span class="grip">⠿</span>'}<span class="ttl">${esc(c.title)}${ph}</span>${badge}
+      <span class="meta">${esc(c.storyline)} · ${c.words}w</span>`;
+}
+function forkCardHTML(f,e,cut,draggable){
+  const c=forkCards[f.id][e.key];
+  if(!c) return `<div class="card"><div class="head"><span class="ttl">${esc(e.file)}</span><span class="meta">still building · reload in a minute</span></div></div>`;
+  return `<div class="card fcard${cut?' cutcard':''}" data-fk="${e.key}" ${draggable?'draggable="true"':''} style="border-left-color:${SLCOLOR[c.storyline]||'#888'}">
+    <div class="head">${forkHeadInner(c,cut||!draggable)}</div><div class="body" data-lazy="1"></div></div>`;
+}
+function forkChanged(f){ return f.cards.filter(e=>{ const c=forkCards[f.id][e.key]; return c&&!['same','own'].includes(forkState(c)); }); }
+function refreshForkCounts(f){
+  const wc=f.cards.reduce((a,e)=>a+((forkCards[f.id][e.key]||{}).words||0),0), el=document.getElementById('f-count');
+  if(el) el.textContent=`${f.cards.length} cards · ${Math.round(wc/1000)}k words`;
+  const ch=document.getElementById('f-changed'); if(ch) ch.textContent='changed vs. canon · '+forkChanged(f).length;
+}
+// true (with a note) when a repo write is in flight or an editor holds unsaved typing a re-render would destroy
+function forkBlocked(){
+  if(forkLock){ toast('One moment: still saving the last change.'); return true; }
+  const ta=document.querySelector('.fcard textarea');
+  if(ta&&ta._dirty&&ta._dirty()){ toast('Save or cancel the open editor first.'); return true; }
+  return false;
+}
+async function busy(btn,fn){
+  if(forkLock){ toast('One moment: still saving the last change.'); return; }
+  const t=btn.textContent; forkLock=true; btn.disabled=true; btn.textContent='Working…';
+  try{ await fn(); }catch(err){ toast('That did not go through: '+err.message,8000); }
+  forkLock=false;
+  if(btn.isConnected){ btn.disabled=false; btn.textContent=t; } }
+function openComposer(target){
+  composerTarget=target||null;
+  document.querySelector('#composer h3').textContent=composerTarget?'NEW CARD · THIS WORKING DRAFT ONLY':'NEW CANON CARD';
+  const sel=document.getElementById('c-sl');
+  if(!sel.options.length) SLORDER.forEach(sl=>{ const o=document.createElement('option');
+    o.value=sl; o.textContent=SLNAME[sl]; if(sl==='VOICE')o.selected=true; sel.appendChild(o); });
+  if(composerTarget&&composerTarget.storyline) sel.value=composerTarget.storyline;
+  document.getElementById('composer').style.display='flex';
+  document.getElementById('c-title').focus();
+}
+function addForkBar(card,f){
+  const key=card.dataset.fk, c=forkCards[f.id][key], body=card.querySelector('.body'), isCut=f.cut.some(e=>e.key===key);
+  const old=body.querySelector('.editbar'); if(old) old.remove();
+  const bar=document.createElement('div'); bar.className='editbar';
+  const add=(label,title,fn,cls)=>{ const b=document.createElement('button'); b.textContent=label; b.title=title;
+    if(cls) b.className=cls; b.addEventListener('click',()=>fn(b)); bar.appendChild(b); };
+  if(isCut){ if(TOKEN) add('↩ restore','Put this card back at the end of the working draft',()=>{
+    if(forkBlocked()) return;
+    f.cards.push(f.cut.splice(f.cut.findIndex(e=>e.key===key),1)[0]); rememberFork(f); renderFork(f,key); }); }
+  else if(TOKEN){
+    add('✎ edit','Edit this copy. The canon card is not touched.',()=>openForkEditor(card,f));
+    add('＋ new below','Write a new card that lives only in this working draft',()=>{ if(!forkBlocked()) openComposer({fid:f.id,afterKey:key,storyline:c.storyline}); });
+    add('⤵ merge next in','Join the following card onto the end of this one',b=>{ if(!forkBlocked()) busy(b,async()=>{ if(await mergeNextForkCard(f,key)) renderFork(f,key); }); });
+    add('✂ cut','Move to the cutting room (restorable)',()=>{
+      if(forkBlocked()) return;
+      const i=f.cards.findIndex(e=>e.key===key); f.cut.unshift(f.cards.splice(i,1)[0]); rememberFork(f); renderFork(f); });
+  }
+  if(c.source && CH[c.source] && forkState(c)!=='same'){
+    const sep=document.createElement('span'); sep.className='sep'; bar.appendChild(sep);
+    add(body.querySelector('.cmp')?'⇄ hide source':'⇄ compare with source','Show the canon card underneath, differences tinted',()=>toggleCompare(card,f));
+    if(TOKEN && !isCut){
+      add('⬆ push to source','Overwrite the canon card with this version (asks first)',b=>busy(b,async()=>{
+        if(await pushToSource(f,key)){ toast('Canon card updated from your draft.'); showForkBody(card,f); } }),'warn');
+      add('⬇ pull from source','Replace this copy with the current canon text (asks first)',b=>busy(b,async()=>{
+        if(await pullFromSource(f,key)){ toast('Draft card refreshed from canon.'); showForkBody(card,f); } }));
+    }
+  }
+  if(bar.children.length) body.prepend(bar);
+}
+function showForkBody(card,f){
+  const c=forkCards[f.id][card.dataset.fk], body=card.querySelector('.body');
+  body.innerHTML=renderText(c.body); delete body.dataset.lazy; addForkBar(card,f);
+  card.querySelector('.head').innerHTML=forkHeadInner(c,!card.hasAttribute('draggable'));
+  refreshForkCounts(f);
+}
+function toggleCompare(card,f){
+  const c=forkCards[f.id][card.dataset.fk], s=CH[c.source], body=card.querySelector('.body');
+  if(body.querySelector('.cmp')) return showForkBody(card,f);
+  body.innerHTML=renderText(c.body,{cls:'fresh',...paraSet(s.body)})+
+    `<div class="cmp"><h4>CANON SOURCE · ${esc(s.title)} · ${s.words}w · red = not in your draft · green (above) = only in your draft</h4>${renderText(s.body,{cls:'gone',...paraSet(c.body)})}</div>`;
+  addForkBar(card,f);
+}
+function openForkEditor(card,f){
+  const key=card.dataset.fk, c=forkCards[f.id][key], body=card.querySelector('.body');
+  body.innerHTML='';
+  const ti=document.createElement('input'); ti.className='ttledit'; ti.value=c.title;
+  const ta=document.createElement('textarea'); ta.value=c.body;
+  const tools=document.createElement('div'); tools.className='edittools';
+  const mk=(label,cls)=>{ const b=document.createElement('button'); b.textContent=label; if(cls)b.className=cls; tools.appendChild(b); return b; };
+  const sv=mk('Save','primary'), sp=mk('Split at cursor'), cx=mk('Cancel');
+  sp.title='Everything after the cursor becomes a new card right below this one';
+  body.append(ti,ta,tools);
+  ta._dirty=()=>ta.value!==c.body||ti.value!==c.title;
+  const frozen=async fn=>{ ta.readOnly=ti.readOnly=true; try{ await fn(); } finally{ ta.readOnly=ti.readOnly=false; } };
+  cx.addEventListener('click',()=>showForkBody(card,f));
+  sv.addEventListener('click',()=>busy(sv,()=>frozen(async()=>{ await saveForkCard(f,key,ti.value.trim()||c.title,ta.value);
+    toast('Saved to the working draft. The canon card is untouched.'); showForkBody(card,f); })));
+  sp.addEventListener('click',()=>busy(sp,()=>frozen(async()=>{
+    const nk=await splitForkCard(f,key,ti.value.trim()||c.title,ta.value,ta.selectionStart);
+    if(nk){ toast('Split into two cards.'); renderFork(f,nk); } })));
+}
+function draftChipsHTML(){
+  let html='<div id="trayfilters" style="margin-bottom:14px">';
+  drafts.forEach(d=>{ html+=`<span class="chip${!activeFork&&d.id===activeDraft?' on':''}" data-d="${d.id}">☆ ${esc(d.name)} · ${d.chapters.length}</span>`; });
+  forks.forEach(f=>{ html+=`<span class="chip${f.id===activeFork?' on':''}" data-f="${f.id}" style="border-color:var(--green)">⑂ ${esc(f.name)} · ${f.cards.length}</span>`; });
+  return html+'<span class="chip" data-d="__new" style="border-style:dashed">+ new draft</span></div>';
+}
+function bindDraftChips(m){
+  m.querySelectorAll('.chip[data-d],.chip[data-f]').forEach(ch=>ch.addEventListener('click',()=>{
+    if(forkBlocked()) return;
+    if(ch.dataset.f){ setActiveFork(ch.dataset.f); return renderDrafts(); }
+    if(ch.dataset.d==='__new'){ if(newDraft()){ setActiveFork(null); renderDrafts(); } return; }
+    setActiveFork(null); setActiveDraft(ch.dataset.d); renderDrafts(); }));
+}
+async function renderFork(f,openKey){
+  const m=document.getElementById('main');
+  const legend='<div class="legend">⑂ A working draft holds its own private copy of every chapter. Edit, cut, split, merge, reorder, and add cards freely: the canon cards on the Shelf do not change. A badge marks any card that has drifted from its source; open it to compare, <b>push</b> your version up to canon, or <b>pull</b> canon back down. Both ask first.</div>';
+  if(!forkCards[f.id]){
+    m.innerHTML=legend+draftChipsHTML()+'<div class="legend">Opening the working draft…</div>'; bindDraftChips(m);
+    try{ await ensureFork(f.id); }
+    catch(err){ if(view==='drafts'&&activeFork===f.id) m.querySelector('.legend:last-child').textContent=err.message; return; }
+    if(view!=='drafts'||activeFork!==f.id) return;
+  }
+  const q=query.trim().length>1?query.trim().toLowerCase():'';
+  const changed=forkChanged(f), drag=forkFilter==='all'&&!q;
+  const list=(forkFilter==='changed'?changed:f.cards).filter(e=>{ const c=forkCards[f.id][e.key];
+    return !q||(c&&(c.title.toLowerCase().includes(q)||c.body.toLowerCase().includes(q))); });
+  let html=legend+draftChipsHTML();
+  if(q) html+=`<div class="legend">${list.length} cards in this working draft match “${esc(query.trim())}”. Search here looks only inside the working draft; to search canon, switch tabs first.</div>`;
+  html+=`<div class="book open"><div class="bhead" style="cursor:default"><span class="btitle">⑂ ${esc(f.name)}</span>
+    <span class="bnote">working draft · forked ${esc(f.created||'')}</span><span class="bcount" id="f-count"></span>
+    ${TOKEN?'<button class="dact" id="f-new">+ new card</button><button class="dact" id="f-ren">rename</button><button class="dact" id="f-del">delete</button>':''}</div>
+    <div id="trayfilters" style="margin:8px 0 2px"><span class="chip${forkFilter==='all'?' on':''}" data-ff="all">all</span>
+    <span class="chip${forkFilter==='changed'?' on':''}" data-ff="changed" id="f-changed"></span></div><div class="chlist">`;
+  if(!list.length) html+=`<div class="legend" style="margin:10px 0">${forkFilter==='changed'?'Nothing has drifted from canon yet.':'No cards.'}</div>`;
+  if(drag) html+='<div class="dropzone" data-i="0"></div>';
+  list.forEach(e=>{ html+=forkCardHTML(f,e,false,drag)+(drag?`<div class="dropzone" data-i="${f.cards.indexOf(e)+1}"></div>`:''); });
+  html+='</div></div>';
+  if(f.cut.length){
+    html+=`<div class="book${window._cutOpen?' open':''}" id="cutroom"><div class="bhead"><span class="btitle" style="font-size:.9rem">✂ Cutting room</span>
+      <span class="bnote">cut from this working draft, restorable</span><span class="bcount">${f.cut.length}</span></div><div class="chlist">`;
+    f.cut.forEach(e=>{ html+=forkCardHTML(f,e,true,false); });
+    html+='</div></div>';
+  }
+  m.innerHTML=html; bindDraftChips(m); refreshForkCounts(f);
+  m.querySelectorAll('.fcard .head').forEach(h=>h.addEventListener('click',()=>{
+    const card=h.parentElement; if(card.querySelector('.body').dataset.lazy) showForkBody(card,f);
+    card.classList.toggle('open'); }));
+  m.querySelectorAll('.fcard[draggable]').forEach(c=>{
+    c.addEventListener('dragstart',()=>{dragId=c.dataset.fk;c.classList.add('dragging');});
+    c.addEventListener('dragend',()=>{dragId=null;c.classList.remove('dragging');}); });
+  m.querySelectorAll('.dropzone').forEach(z=>{
+    z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('hot');});
+    z.addEventListener('dragleave',()=>z.classList.remove('hot'));
+    z.addEventListener('drop',e=>{ e.preventDefault(); z.classList.remove('hot');
+      const old=f.cards.findIndex(x=>x.key===dragId); if(old<0||forkBlocked()) return;
+      const i=+z.dataset.i, before=f.cards.slice(0,i).filter(x=>x.key!==dragId).length;
+      const ent=f.cards.splice(old,1)[0]; f.cards.splice(before,0,ent); rememberFork(f); renderFork(f); }); });
+  m.querySelectorAll('.chip[data-ff]').forEach(ch=>ch.addEventListener('click',()=>{ if(forkBlocked()) return; forkFilter=ch.dataset.ff; renderFork(f); }));
+  const cr=document.getElementById('cutroom');
+  if(cr) cr.querySelector('.bhead').addEventListener('click',()=>{ window._cutOpen=!window._cutOpen; cr.classList.toggle('open'); });
+  if(TOKEN){
+    document.getElementById('f-new').addEventListener('click',()=>{ if(!forkBlocked()) openComposer({fid:f.id,afterKey:null}); });
+    document.getElementById('f-ren').addEventListener('click',()=>{
+      if(forkBlocked()) return;
+      const name=(prompt('New name for this working draft:',f.name)||'').trim();
+      if(name){ f.name=name; rememberFork(f); renderFork(f); } });
+    document.getElementById('f-del').addEventListener('click',e=>{ if(!forkBlocked()) busy(e.target,()=>deleteFork(f)); });
+  }
+  if(openKey){ const card=m.querySelector(`.fcard[data-fk="${openKey}"]`);
+    if(card){ showForkBody(card,f); card.classList.add('open'); card.scrollIntoView({block:'center'}); } }
+}
+
 function addEditBar(card){
   if(!TOKEN || card.querySelector('.editbar')) return;
   const bar=document.createElement('div'); bar.className='editbar';
@@ -338,27 +789,31 @@ function openEditor(card){
     card.querySelector('.ttl').innerHTML=esc(CH[id].title)+(CH[id].title_status==='placeholder'?'<span class="ph">°</span>':''); };
   cx.addEventListener('click',()=>closeTo(true));
   sv.addEventListener('click',async()=>{
-    sv.disabled=true; sv.textContent='Saving…';
+    sv.disabled=true; sv.textContent='Saving…'; ta.readOnly=ti.readOnly=true; // typing mid-save would be thrown away
     try{ await saveChapter(id,ti.value.trim()||c.title,ta.value); closeTo(true); }
-    catch(err){ sv.disabled=false; sv.textContent='Save'; toast('Save failed: '+err.message,6000); }
+    catch(err){ sv.disabled=false; sv.textContent='Save'; ta.readOnly=ti.readOnly=false; toast('Save failed: '+err.message,6000); }
   });
 }
 
 function markDirty(kind,on){ dirtyFlags[kind]=on;
-  document.getElementById('dirty').style.display = (dirtyFlags.books||dirtyFlags.drafts)?'inline':'none'; refreshEditUI(); }
+  document.getElementById('dirty').style.display = (dirtyFlags.books||dirtyFlags.drafts||dirtyFlags.forks)?'inline':'none'; refreshEditUI(); }
 function save(){ localStorage.setItem('library-canon-books', JSON.stringify(books)); markDirty('books',true); }
 function shelved(){ const s=new Set(); books.forEach(b=>b.chapters.forEach(c=>s.add(c))); return s; }
 function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 
-function renderBody(id){
-  const c = CH[id];
-  return c.body.split(/\n\s*\n/).map(p=>{
-    p = esc(p.trim()); if(!p) return '';
+function renderBody(id){ return renderText(CH[id].body); }
+// mark: optional {cls, has(normalisedParagraph)} used by the working-draft compare view
+function renderText(text, mark){
+  return text.split(/\n\s*\n/).map(p=>{
+    const raw=p.trim(); p = esc(raw); if(!p) return '';
     if(/^⟦/.test(p)) return `<p class="src">${p}</p>`;
     if(/^\*{3}$/.test(p)) return `<p class="brk">***</p>`;
-    return `<p>${p}</p>`;
+    const m = mark && !mark.has(normPara(raw)) ? ` class="${mark.cls}"` : '';
+    return `<p${m}>${p}</p>`;
   }).join('');
 }
+function normPara(p){ return p.replace(/\s+/g,' ').trim(); }
+function paraSet(text){ const s=new Set(text.split(/\n\s*\n/).map(normPara)); return {has:p=>s.has(p)}; }
 function cardHTML(id, draggable){
   const c = CH[id]; if(!c) return '';
   const col = SLCOLOR[c.storyline]||'#888';
@@ -461,10 +916,10 @@ function renderCharacters(){
 /* ---------- DRAFTS ---------- */
 function renderDrafts(){
   const m=document.getElementById('main');
-  let html='<div class="legend">A draft is a reading list for the next full version: star ☆ a chapter in any view and it lands in the draft selected here. Nothing moves — starred chapters stay on the Shelf and everywhere else. Drag to set the draft\'s running order.</div>';
-  html+='<div id="trayfilters" style="margin-bottom:14px">';
-  drafts.forEach(d=>{ html+=`<span class="chip${d.id===activeDraft?' on':''}" data-d="${d.id}">${esc(d.name)} · ${d.chapters.length}</span>`; });
-  html+='<span class="chip" data-d="__new" style="border-style:dashed">+ new draft</span></div>';
+  const fk=activeFork&&getFork(activeFork);
+  if(fk) return renderFork(fk);
+  let html='<div class="legend">☆ A draft is a reading list for the next full version: star ☆ a chapter in any view and it lands in the draft selected here. Nothing moves — starred chapters stay on the Shelf and everywhere else. Drag to set the draft\'s running order. These are still the canon cards: editing one here edits it everywhere. To shape a draft without touching canon, <b>⑂ fork</b> it into a working draft.</div>';
+  html+=draftChipsHTML();
   const d=curDraft();
   if(!d){ html+='<div class="legend">No drafts yet. Make one, then go star what feels ready.</div>'; }
   else{
@@ -472,17 +927,16 @@ function renderDrafts(){
     html+=`<div class="book open"><div class="bhead" style="cursor:default"><span class="btitle">${esc(d.name)}</span>
       <span class="bnote">started ${esc(d.created||'')}</span>
       <span class="bcount">${d.chapters.length} ch · ${Math.round(wc/1000)}k words</span>
-      <button class="dact" id="d-ren">rename</button><button class="dact" id="d-del">delete draft</button></div><div class="chlist">`;
+      ${TOKEN&&d.chapters.length?'<button class="dact" id="d-fork" title="Make a working draft: private copies you can reshape without changing these cards">⑂ fork into working draft</button>':''}<button class="dact" id="d-ren">rename</button><button class="dact" id="d-del">delete draft</button></div><div class="chlist">`;
     if(!d.chapters.length) html+='<div class="legend" style="margin:10px 0">Empty so far — the stars on the other tabs feed this list.</div>';
     html+=`<div class="dropzone" data-i="0"></div>`;
     d.chapters.forEach((cid,ci)=>{ html+=cardHTML(cid,true)+`<div class="dropzone" data-i="${ci+1}"></div>`; });
     html+='</div></div>';
   }
-  m.innerHTML=html; bindCards(m);
-  m.querySelectorAll('.chip').forEach(ch=>ch.addEventListener('click',()=>{
-    if(ch.dataset.d==='__new'){ if(newDraft()) renderDrafts(); return; }
-    setActiveDraft(ch.dataset.d); renderDrafts(); }));
+  m.innerHTML=html; bindCards(m); bindDraftChips(m);
   if(d){
+    const fb=document.getElementById('d-fork');
+    if(fb) fb.addEventListener('click',()=>busy(fb,()=>forkDraft(d)));
     document.getElementById('d-ren').addEventListener('click',()=>{
       const name=(prompt('New name for this draft:',d.name)||'').trim();
       if(name){ d.name=name; rememberDrafts(); renderDrafts(); } });
@@ -514,7 +968,9 @@ function renderSearch(){
 
 function render(){
   if(!DATA) return;
-  if(query.trim().length>1) return renderSearch();
+  if(query.trim().length>1){
+    const fk=view==='drafts'&&activeFork&&getFork(activeFork);
+    return fk?renderFork(fk):renderSearch(); } // a working draft searches its own copies, never canon
   if(view==='shelf')renderShelf(); else if(view==='storylines')renderStorylines();
   else if(view==='drafts')renderDrafts(); else renderCharacters();
 }
@@ -550,28 +1006,29 @@ document.getElementById('savegh').addEventListener('click',async()=>{
   try{
     if(dirtyFlags.books) await saveLayout();
     if(dirtyFlags.drafts) await saveDrafts();
+    if(dirtyFlags.forks){ if(forkLock) throw new Error('still saving the last change, try again in a moment'); await saveForks(); }
   } catch(e){ toast('Save failed: '+e.message,6000); }
   b.disabled=false; });
 document.getElementById('newcard').addEventListener('click',()=>{
-  const sel=document.getElementById('c-sl');
-  if(!sel.options.length) SLORDER.forEach(sl=>{ const o=document.createElement('option');
-    o.value=sl; o.textContent=SLNAME[sl]; if(sl==='VOICE')o.selected=true; sel.appendChild(o); });
-  document.getElementById('composer').style.display='flex';
-  document.getElementById('c-title').focus(); });
+  const fk=view==='drafts'&&activeFork&&getFork(activeFork); // while a working draft is on screen, new cards belong to it
+  if(fk){ if(!forkBlocked()) openComposer({fid:fk.id,afterKey:null}); } else openComposer(null); });
 document.getElementById('c-cancel').addEventListener('click',()=>{
   document.getElementById('composer').style.display='none'; });
 document.getElementById('c-save').addEventListener('click',async()=>{
   const t=document.getElementById('c-title').value.trim(), body=document.getElementById('c-body').value;
   if(!t||!body.trim()){ toast('A card needs a title and some words.'); return; }
-  const b=document.getElementById('c-save'); b.disabled=true; b.textContent='Saving…';
+  if(forkLock){ toast('One moment: still saving the last change.'); return; }
+  const b=document.getElementById('c-save'); b.disabled=true; b.textContent='Saving…'; forkLock=true;
   try{
-    await createChapter(t, document.getElementById('c-sl').value, body);
+    const tf=composerTarget&&getFork(composerTarget.fid);
+    const nk=tf ? await createForkCard(tf, composerTarget.afterKey, t, document.getElementById('c-sl').value, body)
+                : await createChapter(t, document.getElementById('c-sl').value, body);
     document.getElementById('c-title').value=''; document.getElementById('c-body').value='';
     document.getElementById('composer').style.display='none';
-    toast('Card saved. It is at the top of the Unshelved tray; drag it into a book whenever.');
-    render();
+    if(tf){ toast('Card added to this working draft only.'); renderFork(tf,nk); }
+    else{ toast('Card saved. It is at the top of the Unshelved tray; drag it into a book whenever.'); render(); }
   }catch(e){ toast('Save failed: '+e.message,6000); }
-  b.disabled=false; b.textContent='Save card'; });
+  forkLock=false; b.disabled=false; b.textContent='Save card'; });
 
 function boot(data){
   DATA=data; CH=DATA.chapters;
@@ -593,6 +1050,25 @@ function boot(data){
   if(dsaved){ try{ const p=JSON.parse(dsaved); if(Array.isArray(p)){ drafts=p; markDirty('drafts',true); } }catch(e){} }
   activeDraft=localStorage.getItem('library-canon-active-draft');
   if(!drafts.some(d=>d.id===activeDraft)) activeDraft=drafts.length?drafts[0].id:null;
+  forks=JSON.parse(JSON.stringify(DATA.forks||[]));
+  forks.forEach(f=>{ f.cut=f.cut||[]; });
+  const put=(id,man)=>{ const i=forks.findIndex(f=>f.id===id); if(i>=0) forks[i]=man; else forks.push(man); };
+  const fbr=lsGet('library-canon-forks-saved',{}); // saved minutes ago, maybe not baked into this build yet
+  for(const [id,b] of Object.entries(fbr)){
+    const built=getFork(id), bt=h32(built?manifestText(built):'none');
+    if(Date.now()-b.ts>=FRESH_MS){ delete fbr[id]; continue; }
+    if(b.deleted){ forks=forks.filter(f=>f.id!==id); continue; }
+    b.manifest.cut=b.manifest.cut||[];
+    if(bt!==h32(manifestText(b.manifest)) && (b.seen||[]).includes(bt)) put(id,b.manifest);
+    else delete fbr[id]; // the build caught up, or it shows something newer from elsewhere
+  }
+  lsSet('library-canon-forks-saved',fbr);
+  forks.forEach(f=>forkRepoText.set(f.id,manifestText(f)));
+  for(const [id,man] of Object.entries(lsGet('library-canon-forks',{}))){ // unsaved layout changes
+    if(getFork(id)){ man.cut=man.cut||[]; put(id,man); dirtyForkIds.add(id); } }
+  if(dirtyForkIds.size) markDirty('forks',true);
+  activeFork=localStorage.getItem('library-canon-active-fork');
+  if(!getFork(activeFork)) activeFork=null;
   const h=location.hash.replace('#','');
   if(['storylines','characters','drafts'].includes(h)){ view=h;
     document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x.dataset.v===h)); }
@@ -607,15 +1083,18 @@ async function deriveKey(pw, salt, usages){
   return crypto.subtle.deriveKey({name:'PBKDF2', salt, iterations:310000, hash:'SHA-256'}, km,
     {name:'AES-GCM', length:256}, false, usages||['decrypt']);
 }
+async function decryptBytes(pw, b){
+  const key=await deriveKey(pw, b.slice(0,16));
+  return new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM', iv:b.slice(16,28)}, key, b.slice(28)));
+}
 async function tryUnlock(pw){
   const res=await fetch('data.enc',{cache:'no-store'}); if(!res.ok) throw new Error('data.enc not found');
-  const b=new Uint8Array(await res.arrayBuffer());
-  const key=await deriveKey(pw, b.slice(0,16));
-  const plain=await crypto.subtle.decrypt({name:'AES-GCM', iv:b.slice(16,28)}, key, b.slice(28));
+  const plain=await decryptBytes(pw, new Uint8Array(await res.arrayBuffer()));
   document.getElementById('lock').style.display='none';
   PW=pw;
-  boot(JSON.parse(new TextDecoder().decode(plain)));
+  boot(JSON.parse(decTxt(plain)));
   await loadToken();
+  if(TOKEN && view==='drafts' && !(query.trim().length>1)) render(); // the drafts header carries token-only buttons
 }
 let inline=null;
 try{ inline=JSON.parse(document.getElementById('data').textContent); }catch(e){}
