@@ -69,8 +69,15 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
 .editbar button.warn{border-color:#b5523f;color:#8f3a2a}
 .cmp{margin:12px 0 4px;padding:6px 14px 10px;background:#e9efe2;border:1px solid #c3cfb4;border-radius:4px}
 .cmp h4{margin:6px 0;font-size:.7rem;font-weight:normal;letter-spacing:.08em;color:#4d6240;font-family:'Courier New',monospace}
-.card .body p.gone{background:#f6d9d2}
-.card .body p.fresh{background:#dcefd6}
+.card .body .gone{background:#f6d9d2}
+.card .body .fresh{background:#dcefd6}
+/* script layout */
+.cue{margin:.95em 0}
+.cue .who{margin-left:30%;font-family:'Courier New',monospace;font-size:.78rem;font-weight:bold;letter-spacing:.08em;color:#5a4a2e}
+.cue .say{margin:0 14% 0 12%}
+.cue .paren{margin-left:21%;font-style:italic;font-size:.84rem;color:#6b5d42}
+.card .body p.sdir{text-align:center;font-style:italic;color:#6b5d42}
+@media(max-width:700px){.cue .who{margin-left:16%}.cue .say{margin:0 3% 0 5%}.cue .paren{margin-left:10%}}
 .card.cutcard{opacity:.75}
 /* shelf */
 .book{background:var(--panel);border:1px solid var(--line);border-radius:6px;margin:14px 0;padding:10px 14px}
@@ -808,10 +815,19 @@ function renderText(text, mark){
     const raw=p.trim(); p = esc(raw); if(!p) return '';
     if(/^⟦/.test(p)) return `<p class="src">${p}</p>`;
     if(/^\*{3}$/.test(p)) return `<p class="brk">***</p>`;
-    const m = mark && !mark.has(normPara(raw)) ? ` class="${mark.cls}"` : '';
-    return `<p${m}>${p}</p>`;
+    const m = mark && !mark.has(normPara(raw)) ? ' '+mark.cls : '';
+    // script layout: [a direction] alone, or a cue = SPEAKER on the first line with the speech under it
+    if(DIRECTION.test(raw)) return `<p class="sdir${m}">${p}</p>`;
+    const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
+    if(lines.length>1 && isSpeaker(lines[0])) return `<div class="cue${m}"><div class="who">${esc(lines[0])}</div>`+
+      lines.slice(1).map(l=>DIRECTION.test(l)?`<div class="paren">${esc(l)}</div>`:`<div class="say">${emph(esc(l))}</div>`).join('')+'</div>';
+    return `<p class="${m.trim()}">${emph(p)}</p>`;
   }).join('');
 }
+const DIRECTION=/^\[[^\]]*\]$/;
+function isSpeaker(l){ l=l.replace(/’s\b/g,''); return l.length<=50 && /^[A-Z][A-Z0-9 ’'.,&()\-]*$/.test(l) && /[A-Z].*[A-Z]/.test(l); }
+// the Docs export marks emphasis with asterisks; show it as emphasis (the stored text keeps the asterisks)
+function emph(h){ return h.replace(/\*\*\*([^*]+)\*\*\*/g,'<b><i>$1</i></b>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/\*([^*\n]+)\*/g,'<i>$1</i>'); }
 function normPara(p){ return p.replace(/\s+/g,' ').trim(); }
 function paraSet(text){ const s=new Set(text.split(/\n\s*\n/).map(normPara)); return {has:p=>s.has(p)}; }
 function cardHTML(id, draggable){
