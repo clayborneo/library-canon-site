@@ -347,6 +347,11 @@ function author(){
 async function route(){
   const h=decodeURIComponent(location.hash.slice(1));
   if(h==='author') return author();
+  if(h==='fresh'){ history.replaceState(null,'',location.pathname); // …/read/#fresh: see the site as a first-time reader (for Clay's reviews)
+    if(!S.name||confirm('Start over on this device as a brand-new reader? The shelf and notes in this browser are set aside.')){
+      if(S.token){ try{ localStorage.setItem(LS+'-was-'+S.token.slice(0,8),JSON.stringify(S)); }catch(e){} }
+      const pw=localStorage.getItem(LS+'-pw'); localStorage.removeItem(LS); localStorage.removeItem(LS+'-pw'); load();
+      if(new URLSearchParams(location.search).has('keep')&&pw) localStorage.setItem(LS+'-pw',pw); else if(!$('data').textContent.trim().startsWith('{')) return location.reload(); } }
   if(h.startsWith('me=')){ const t=h.slice(3); history.replaceState(null,'',location.pathname);
     if(/^[\w-]{20,80}$/.test(t)&&t!==S.token){
       let r=null; try{ r=await rpc('library_pull',{p_token:t}); }catch(e){}
