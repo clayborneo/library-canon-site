@@ -155,7 +155,7 @@ function offer(){
   save(); window.scrollTo(0,0);
   if(!S.offered.length){ main.innerHTML=`<div class="center" style="margin-top:14vh"><h1>${DATA.order.length?'You have read everything on the shelves, for now.':'The shelves are empty, for now.'}</h1>
     <p class="quiet">More chapters arrive from time to time.</p></div>`; return; }
-  main.innerHTML=`<p class="quiet center" style="margin-bottom:2.2em">The Library offers three. Pick one.</p>`+
+  main.innerHTML=`<p class="quiet center" style="margin-bottom:2.2em">The Library offers you three. Choose one.</p>`+
     S.offered.map(id=>`<button class="offer" data-id="${esc(id)}"><span class="t">${esc(CH[id].title)}</span><span class="f">${esc(CH[id].first)}</span></button>`).join('');
   main.querySelectorAll('.offer').forEach(b=>b.addEventListener('click',()=>open(b.dataset.id)));
 }
