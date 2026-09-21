@@ -122,7 +122,7 @@ function emph(h){ return h.replace(/\*\*\*([^*]+)\*\*\*/g,'<b><i>$1</i></b>').re
 function renderText(text){
   return text.split(/\n\s*\n/).map(p=>{
     const raw=p.trim(); if(!raw) return '';
-    if(/^\*{3}$/.test(raw)) return '<p class="brk">***</p>';
+    if(/^\*{3,}$/.test(raw)) return '<p class="brk">***</p>';
     if(DIRECTION.test(raw)) return `<p class="sdir">${esc(raw)}</p>`;
     const hd=raw.match(/^(#{1,6}) +(.+)$/), bare=(hd?hd[2]:raw).replace(/^\*\*(.+)\*\*$/,'$1');
     if(SLUG.test(bare) && !/\n/.test(raw)) return `<p class="slug">${esc(bare)}</p>`;

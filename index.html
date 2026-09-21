@@ -827,7 +827,7 @@ function renderText(text, mark){
   return text.split(/\n\s*\n/).map(p=>{
     const raw=p.trim(); p = esc(raw); if(!p) return '';
     if(/^⟦/.test(p)) return `<p class="src">${p}</p>`;
-    if(/^\*{3}$/.test(p)) return `<p class="brk">***</p>`;
+    if(/^\*{3,}$/.test(p)) return `<p class="brk">***</p>`;
     const m = mark && !mark.has(normPara(raw)) ? ' '+mark.cls : '';
     // script layout: [a direction] alone, or a cue = SPEAKER on the first line with the speech under it
     if(DIRECTION.test(raw)) return `<p class="sdir${m}">${p}</p>`;
