@@ -155,7 +155,7 @@ function offer(){
   save(); window.scrollTo(0,0);
   if(!S.offered.length){ main.innerHTML=`<div class="center" style="margin-top:14vh"><h1>${DATA.order.length?'You have read everything on the shelves, for now.':'The shelves are empty, for now.'}</h1>
     <p class="quiet">More chapters arrive from time to time.</p></div>`; return; }
-  main.innerHTML=`<p class="quiet center" style="margin-bottom:2.2em">${S.read.length?'The Library offers you three more. Take one.':'The Library offers you three chapters. Take one.'}</p>`+
+  main.innerHTML=`<p class="quiet center" style="margin-bottom:2.2em">The Library offers three. Pick one.</p>`+
     S.offered.map(id=>`<button class="offer" data-id="${esc(id)}"><span class="t">${esc(CH[id].title)}</span><span class="f">${esc(CH[id].first)}</span></button>`).join('');
   main.querySelectorAll('.offer').forEach(b=>b.addEventListener('click',()=>open(b.dataset.id)));
 }
@@ -184,7 +184,7 @@ function shelf(){
   main.innerHTML=`<h1 style="margin-bottom:1.2em">${esc(S.name)}’s shelf</h1><div class="shelf">`+
     (S.read.length?S.read.map(r=>CH[r.id]?`<a data-id="${esc(r.id)}"><span class="t">${esc(CH[r.id].title)}</span><span class="m">${myNotes(r.id).length?myNotes(r.id).length+' note'+(myNotes(r.id).length>1?'s':'')+' · ':''}${new Date(r.at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></a>`:'').join(''):'<p class="quiet">Nothing here yet.</p>')+
     `</div><div class="row" style="margin:2.4em 0 3.4em"><button class="btn" id="another">Another chapter →</button></div>
-    ${canBackUp()?`<p class="quiet">Your shelf and notes are kept in this browser and backed up as you go${Object.values(S.notes).some(n=>!n.synced)?' (a few notes are still waiting to upload)':''}. Your personal link brings them to any device, and back to this one if the browser ever forgets you. Save it somewhere; keep it to yourself, because it is you.</p>
+    ${canBackUp()?`<p class="quiet">Your shelf and notes are kept in this browser and backed up as you go${Object.values(S.notes).some(n=>!n.synced)?' (a few notes are still waiting to upload)':''}. Your personal link brings them to any device, and back to this one if the browser ever forgets you.</p>
     <div class="row" style="margin-top:12px"><button class="btn ghost" id="mylink">Copy my personal link</button></div>`:'<p class="quiet">Your shelf and notes are kept in this browser, on this device.</p>'}`;
   main.querySelectorAll('.shelf a').forEach(a=>a.addEventListener('click',()=>open(a.dataset.id)));
   $('another').addEventListener('click',offer);
