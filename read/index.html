@@ -139,7 +139,7 @@ function chrome(on){ $('bar').style.display=on?'flex':'none'; $('toshelf').textC
 function welcome(){
   chrome(false);
   main.innerHTML=`<div class="center" style="margin-top:12vh"><h1 style="margin-bottom:.6em;letter-spacing:.14em">THE LIBRARY</h1>
-    <p class="quiet" style="margin-bottom:2.4em">You will be given one chapter at a time.<br>What you have read stays on your shelf.</p>
+    <p class="quiet" style="margin-bottom:2.4em">You will be given three chapters to choose from.<br>What you have read stays on your shelf.</p>
     <input type="text" id="nm" placeholder="Your name" maxlength="60" style="max-width:20em;text-align:center" autocomplete="given-name">
     <div style="margin-top:18px"><button class="btn" id="go">Enter</button></div></div>`;
   const go=()=>{ const n=$('nm').value.trim(); if(!n){ $('nm').focus(); return; }
@@ -379,7 +379,7 @@ async function unlock(pw){
   return JSON.parse(new TextDecoder().decode(plain)); }
 function lock(err){
   main.innerHTML=`<div class="center" style="margin-top:14vh"><h1 style="margin-bottom:.6em;letter-spacing:.14em">THE LIBRARY</h1>
-    <p class="quiet" style="margin-bottom:2em">${err?'That is not the word.':'Say the word to come in.'}</p>
+    <p class="quiet" style="margin-bottom:2em">${err?'Wrong password.':'Enter the password.'}</p>
     <input type="password" id="pw" placeholder="password" style="max-width:20em;text-align:center" autocomplete="current-password">
     <label class="chk" style="justify-content:center"><input type="checkbox" id="keep" checked> remember on this device</label>
     <div style="margin-top:18px"><button class="btn" id="in">Enter</button></div></div>`;
