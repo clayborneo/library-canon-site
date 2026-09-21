@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>The Library</title>
+<style>
+:root{ --paper:#f6f0e1; --ink:#2a2418; --dim:#8a7a5c; --line:#ddd2b8; --accent:#a8742a; --mark:#f3e0a6; --mark2:#ecd27f;
+  --sheet:#fffaf0; --btn:#2a2418; --btnink:#f6f0e1; }
+@media(prefers-color-scheme:dark){ :root{ --paper:#1d1812; --ink:#e9dfc8; --dim:#9a8a6a; --line:#3a2f20; --accent:#d9a441;
+  --mark:#5a4718; --mark2:#745b1c; --sheet:#262018; --btn:#e9dfc8; --btnink:#1d1812; } }
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:'Iowan Old Style',Palatino,Georgia,serif;
+  font-size:19px;line-height:1.7}
+button{font-family:inherit;color:inherit}
+.bar{position:sticky;top:0;z-index:20;display:flex;justify-content:space-between;align-items:center;
+  padding:10px 18px;background:var(--paper);font-size:.72rem;letter-spacing:.16em;color:var(--dim)}
+.bar button{background:none;border:none;cursor:pointer;color:var(--dim);letter-spacing:.16em;font-size:.72rem;padding:4px 0}
+.bar button:hover{color:var(--ink)}
+main{max-width:34em;margin:0 auto;padding:6vh 22px 30vh}
+h1{font-size:1.55rem;font-weight:normal;line-height:1.3;margin:0 0 2.2em;letter-spacing:.01em}
+.quiet{color:var(--dim);font-size:.85rem;line-height:1.6}
+.center{text-align:center}
+/* the text */
+.text p{margin:0 0 1.05em}
+.text p.brk{text-align:center;letter-spacing:.5em;color:var(--dim);margin:2em 0}
+.text p.hd{font-weight:bold;margin:2em 0 .6em}
+.text p.hd1{font-size:1.2rem} .text p.hd2{font-size:1.1rem}
+.text p.slug{font-family:'Courier New',monospace;font-weight:bold;font-size:.8rem;letter-spacing:.06em;margin:2.4em 0 .8em}
+.text p.sdir{text-align:center;font-style:italic;color:var(--dim)}
+.cue{margin:1.15em 0}
+.cue .who{margin-left:30%;font-family:'Courier New',monospace;font-size:.74rem;font-weight:bold;letter-spacing:.1em;color:var(--dim)}
+.cue .say{margin:0 9% 0 11%}
+.cue .paren{margin-left:20%;font-style:italic;font-size:.88rem;color:var(--dim)}
+@media(max-width:600px){ body{font-size:18px} .cue .who{margin-left:14%} .cue .say{margin:0 2% 0 5%} .cue .paren{margin-left:9%} }
+mark{background:var(--mark);color:inherit;cursor:pointer;border-radius:2px;padding:.08em 0}
+mark:hover{background:var(--mark2)}
+/* end of chapter */
+.after{margin-top:5em;padding-top:2em;border-top:1px solid var(--line)}
+.notes{margin:0 0 2.2em}
+.note{border-left:2px solid var(--mark2);padding:2px 0 2px 14px;margin:0 0 1.2em;cursor:pointer}
+.note .q{color:var(--dim);font-style:italic;font-size:.85rem;line-height:1.5}
+.note .b{font-size:.95rem;white-space:pre-wrap}
+.btn{display:inline-block;background:var(--btn);color:var(--btnink);border:none;border-radius:3px;padding:12px 26px;
+  font-size:.95rem;cursor:pointer;letter-spacing:.02em}
+.btn.ghost{background:none;color:var(--ink);border:1px solid var(--line)}
+.btn:disabled{opacity:.5}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+/* choosing */
+.offer{display:block;width:100%;text-align:left;background:none;border:1px solid var(--line);border-radius:4px;
+  padding:22px 24px;margin:0 0 16px;cursor:pointer;line-height:1.5}
+.offer:hover{border-color:var(--accent)}
+.offer .t{font-size:1.15rem;display:block;margin-bottom:6px}
+.offer .f{color:var(--dim);font-size:.88rem;font-style:italic;display:block}
+.shelf a{display:flex;justify-content:space-between;gap:16px;padding:13px 0;border-bottom:1px solid var(--line);
+  color:var(--ink);text-decoration:none;cursor:pointer}
+.shelf a:hover .t{color:var(--accent)}
+.shelf .m{color:var(--dim);font-size:.75rem;white-space:nowrap;align-self:center}
+input[type=text],input[type=password],textarea{width:100%;background:var(--sheet);color:var(--ink);border:1px solid var(--line);
+  border-radius:3px;padding:12px 14px;font-family:inherit;font-size:1rem;line-height:1.5}
+textarea{min-height:7.5em;resize:vertical}
+label.chk{display:flex;gap:8px;align-items:center;font-size:.8rem;color:var(--dim);margin:10px 0 0}
+/* selection bar + note sheet */
+#selbar{position:fixed;left:0;right:0;bottom:0;z-index:40;display:none;justify-content:center;padding:12px;
+  background:linear-gradient(transparent,var(--paper) 45%)}
+#selbar button{box-shadow:0 2px 14px rgba(0,0,0,.25)}
+#sheet{position:fixed;inset:0;z-index:50;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.35)}
+#sheet .in{background:var(--sheet);width:min(36em,100%);border-radius:10px 10px 0 0;padding:20px 22px 24px;max-height:85vh;overflow:auto}
+#sheet .q{color:var(--dim);font-style:italic;font-size:.88rem;line-height:1.5;border-left:2px solid var(--mark2);padding-left:12px;margin:0 0 14px;
+  max-height:7.5em;overflow:auto}
+#toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:60;background:var(--btn);color:var(--btnink);
+  padding:8px 18px;border-radius:20px;font-size:.8rem;display:none;max-width:90vw;text-align:center}
+blockquote{margin:0 0 6px;padding-left:12px;border-left:2px solid var(--mark2);color:var(--dim);font-style:italic;font-size:.88rem}
+.au h2{font-size:1.05rem;font-weight:normal;margin:2.4em 0 .8em;border-bottom:1px solid var(--line);padding-bottom:6px}
+.au .n{margin:0 0 1.4em}.au .by{font-size:.72rem;letter-spacing:.06em;color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="bar" id="bar" style="display:none"><button id="home">THE LIBRARY</button><button id="toshelf"></button></div>
+<main id="main"></main>
+<div id="selbar"><button class="btn" id="selbtn">✎ Note on this passage</button></div>
+<div id="sheet"><div class="in">
+  <div class="q" id="sh-q"></div>
+  <textarea id="sh-t" maxlength="6000" placeholder="Your note. Only Clay sees it."></textarea>
+  <div class="row" style="margin-top:12px"><button class="btn" id="sh-save">Save note</button>
+    <button class="btn ghost" id="sh-cancel">Cancel</button><span style="flex:1"></span>
+    <button class="btn ghost" id="sh-del" style="display:none">Delete</button></div>
+</div></div>
+<div id="toast"></div>
+<script id="data" type="application/json">/*__DATA__*/</script>
+<script>
+/* The Library, readers' site. One chapter at a time; the chapters you have read stay on your shelf.
+   Local-first: everything a reader does is kept in this browser and mirrored to Supabase when it is
+   configured (notes are encrypted here first, so the server only ever holds ciphertext). */
+let DATA=null, CH=null, S=null, PW=null, noteKey=null, pending=null, editing=null;
+const LS='library-reader', $=id=>document.getElementById(id), main=$('main');
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+const b64=u=>btoa(Array.from(u,c=>String.fromCharCode(c)).join(''));
+const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+function toast(msg,ms){ const t=$('toast'); t.textContent=msg; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none',ms||3200); }
+function uuid(){ return crypto.randomUUID?crypto.randomUUID():'10000000-1000-4000-8000-100000000000'.replace(/[018]/g,c=>(c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16)); }
+function newToken(){ return b64(crypto.getRandomValues(new Uint8Array(24))).replace(/[+/=]/g,c=>({'+':'-','/':'_','=':''}[c])); }
+function load(){ try{ S=JSON.parse(localStorage.getItem(LS)||'null'); }catch(e){ S=null; }
+  S=Object.assign({token:null,name:'',read:[],offered:[],current:null,notes:{}},S||{}); }
+function persist(){ try{ localStorage.setItem(LS,JSON.stringify(S)); return true; }catch(e){ return false; } }
+// another tab of the same browser changed things: fold its shelf and notes into this one instead of overwriting them
+window.addEventListener('storage',e=>{ if(e.key!==LS||!e.newValue||!S) return;
+  try{ const o=JSON.parse(e.newValue); if(o.token!==S.token) return;
+    (o.read||[]).forEach(x=>{ if(!hasRead(x.id)) S.read.push(x); });
+    for(const n of Object.values(o.notes||{})){ const m=S.notes[n.id]; if(!m||(n.updated||'')>(m.updated||'')) S.notes[n.id]=n; }
+    if($('text')) paint(); }catch(_){} });
+function save(){ persist(); clearTimeout(save._h); save._h=setTimeout(pushState,1200); }
+const hasRead=id=>S.read.some(r=>r.id===id);
+const myNotes=id=>Object.values(S.notes).filter(n=>n.chapter===id&&!n.deleted).sort((a,b)=>(a.para-b.para)||(a.start-b.start));
+
+/* ---------- the text: same script / heading layout as the canon site ---------- */
+const DIRECTION=/^\[[^\]]*\]$/, SLUG=/^(INT|EXT|INT\.?\/EXT|I\/E)[. ]/;
+function isSpeaker(l){ l=l.replace(/’s\b/g,''); return l.length<=50 && /^[A-Z][A-Z0-9 ’'.,&()\/\-]*$/.test(l) && /[A-Z].*[A-Z]/.test(l); }
+function emph(h){ return h.replace(/\*\*\*([^*]+)\*\*\*/g,'<b><i>$1</i></b>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/\*([^*\n]+)\*/g,'<i>$1</i>'); }
+function renderText(text){
+  return text.split(/\n\s*\n/).map(p=>{
+    const raw=p.trim(); if(!raw) return '';
+    if(/^\*{3}$/.test(raw)) return '<p class="brk">***</p>';
+    if(DIRECTION.test(raw)) return `<p class="sdir">${esc(raw)}</p>`;
+    const hd=raw.match(/^(#{1,6}) +(.+)$/), bare=(hd?hd[2]:raw).replace(/^\*\*(.+)\*\*$/,'$1');
+    if(SLUG.test(bare) && !/\n/.test(raw)) return `<p class="slug">${esc(bare)}</p>`;
+    if(hd) return `<p class="hd hd${hd[1].length}">${emph(esc(hd[2]))}</p>`;
+    const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
+    if(lines.length>1 && isSpeaker(lines[0])) return `<div class="cue"><div class="who">${esc(lines[0])}</div>`+
+      lines.slice(1).map(l=>DIRECTION.test(l)?`<div class="paren">${esc(l)}</div>`:`<div class="say">${emph(esc(l))}</div>`).join('')+'</div>';
+    return `<p>${emph(esc(raw)).replace(/\n/g,'<br>')}</p>`;
+  }).join('');
+}
+
+/* ---------- screens ---------- */
+function chrome(on){ $('bar').style.display=on?'flex':'none'; $('toshelf').textContent=S.read.length?`YOUR SHELF · ${S.read.length}`:''; hideSel(); }
+function welcome(){
+  chrome(false);
+  main.innerHTML=`<div class="center" style="margin-top:12vh"><h1 style="margin-bottom:.6em;letter-spacing:.14em">THE LIBRARY</h1>
+    <p class="quiet" style="margin-bottom:2.4em">You will be given one chapter at a time.<br>What you have read stays on your shelf.</p>
+    <input type="text" id="nm" placeholder="Your name" maxlength="60" style="max-width:20em;text-align:center" autocomplete="given-name">
+    <div style="margin-top:18px"><button class="btn" id="go">Enter</button></div></div>`;
+  const go=()=>{ const n=$('nm').value.trim(); if(!n){ $('nm').focus(); return; }
+    S.name=n; if(!S.token) S.token=newToken(); save(); route(); };
+  $('go').addEventListener('click',go); $('nm').addEventListener('keydown',e=>{ if(e.key==='Enter') go(); }); $('nm').focus();
+}
+function offer(){
+  chrome(true); S.current=null;
+  const unread=DATA.order.filter(id=>!hasRead(id));
+  S.offered=(S.offered||[]).filter(id=>unread.includes(id));           // the three stay the same until one is taken
+  const pool=unread.filter(id=>!S.offered.includes(id));
+  while(S.offered.length<3 && pool.length) S.offered.push(pool.splice(Math.floor(Math.random()*pool.length),1)[0]);
+  save(); window.scrollTo(0,0);
+  if(!S.offered.length){ main.innerHTML=`<div class="center" style="margin-top:14vh"><h1>${DATA.order.length?'You have read everything on the shelves, for now.':'The shelves are empty, for now.'}</h1>
+    <p class="quiet">More chapters arrive from time to time.</p></div>`; return; }
+  main.innerHTML=`<p class="quiet center" style="margin-bottom:2.2em">${S.read.length?'The Library offers you three more. Take one.':'The Library offers you three chapters. Take one.'}</p>`+
+    S.offered.map(id=>`<button class="offer" data-id="${esc(id)}"><span class="t">${esc(CH[id].title)}</span><span class="f">${esc(CH[id].first)}</span></button>`).join('');
+  main.querySelectorAll('.offer').forEach(b=>b.addEventListener('click',()=>open(b.dataset.id)));
+}
+function open(id){
+  if(!CH[id]) return offer();
+  if(!hasRead(id)) S.read.push({id,at:new Date().toISOString()});
+  S.offered=(S.offered||[]).filter(x=>x!==id); S.current=id; save();
+  chrome(true); const c=CH[id];
+  main.innerHTML=`<h1>${esc(c.title)}</h1><div class="text" id="text">${renderText(c.body)}</div>
+    <div class="after"><div class="notes" id="notes"></div>
+      <p class="quiet" style="margin:0 0 10px">Select any passage to leave a note on it. Or say something about the whole chapter:</p>
+      <textarea id="whole" maxlength="6000" placeholder="A note on this chapter. Only Clay sees it."></textarea>
+      <div class="row" style="margin:12px 0 3.2em"><button class="btn ghost" id="whole-save">Save note</button></div>
+      <div class="row"><button class="btn" id="another">Another chapter →</button>
+        <button class="btn ghost" id="share">Share this chapter</button></div></div>`;
+  $('another').addEventListener('click',offer);
+  $('share').addEventListener('click',()=>copy(location.origin+location.pathname+'#c='+encodeURIComponent(id),'Link copied. Whoever you send it to will also need the password.'));
+  $('whole-save').addEventListener('click',()=>{ const v=$('whole').value.trim(); if(!v) return;
+    if(!putNote({id:uuid(),chapter:id,para:-1,start:0,quote:'',body:v})) return;
+    $('whole').value=''; paint(); saidSaved(); });
+  paint(); window.scrollTo(0,0);
+}
+function shelf(){
+  chrome(true); S.current=null; save(); window.scrollTo(0,0);
+  const link=location.origin+location.pathname+'#me='+S.token;
+  main.innerHTML=`<h1 style="margin-bottom:1.2em">${esc(S.name)}’s shelf</h1><div class="shelf">`+
+    (S.read.length?S.read.map(r=>CH[r.id]?`<a data-id="${esc(r.id)}"><span class="t">${esc(CH[r.id].title)}</span><span class="m">${myNotes(r.id).length?myNotes(r.id).length+' note'+(myNotes(r.id).length>1?'s':'')+' · ':''}${new Date(r.at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></a>`:'').join(''):'<p class="quiet">Nothing here yet.</p>')+
+    `</div><div class="row" style="margin:2.4em 0 3.4em"><button class="btn" id="another">Another chapter →</button></div>
+    ${canBackUp()?`<p class="quiet">Your shelf and notes are kept in this browser and backed up as you go${Object.values(S.notes).some(n=>!n.synced)?' (a few notes are still waiting to upload)':''}. Your personal link brings them to any device, and back to this one if the browser ever forgets you. Save it somewhere; keep it to yourself, because it is you.</p>
+    <div class="row" style="margin-top:12px"><button class="btn ghost" id="mylink">Copy my personal link</button></div>`:'<p class="quiet">Your shelf and notes are kept in this browser, on this device.</p>'}`;
+  main.querySelectorAll('.shelf a').forEach(a=>a.addEventListener('click',()=>open(a.dataset.id)));
+  $('another').addEventListener('click',offer);
+  if($('mylink')) $('mylink').addEventListener('click',()=>copy(link,'Personal link copied.'));
+}
+async function copy(text,msg){ try{ await navigator.clipboard.writeText(text); toast(msg,4200); }
+  catch(e){ window.prompt('Copy this link:',text); } }
+
+/* ---------- notes on a passage ---------- */
+function blocks(){ return [...$('text').children]; }
+function paint(){ // highlights + the list under the chapter
+  const id=S.current, t=$('text'); if(!id||!t) return;
+  t.querySelectorAll('mark').forEach(m=>{ m.replaceWith(...m.childNodes); }); t.normalize();
+  const bl=blocks(), notes=myNotes(id);
+  notes.filter(n=>n.para>=0&&n.quote).forEach(n=>{
+    const order=bl.map((b,i)=>i).sort((x,y)=>Math.abs(x-n.para)-Math.abs(y-n.para)); // the text may have been edited since: nearest paragraph first
+    for(const i of order){ const full=bl[i].textContent;
+      const at=(i===n.para&&full.substr(n.start,n.quote.length)===n.quote)?n.start:full.indexOf(n.quote);
+      if(at>=0){ wrap(bl[i],at,at+n.quote.length,n.id); break; } } });   // not found anywhere: the note still shows in the list below
+  $('notes').innerHTML=notes.length?'<p class="quiet" style="margin:0 0 14px">Your notes on this chapter</p>'+notes.map(n=>
+    `<div class="note" data-n="${n.id}">${n.quote?`<div class="q">“${esc(n.quote.length>160?n.quote.slice(0,160)+'…':n.quote)}”</div>`:''}<div class="b">${esc(n.body)}</div></div>`).join(''):'';
+  t.querySelectorAll('mark').forEach(m=>m.addEventListener('click',e=>{ e.stopPropagation(); openSheet(S.notes[m.dataset.n]); }));
+  $('notes').querySelectorAll('.note').forEach(d=>d.addEventListener('click',()=>openSheet(S.notes[d.dataset.n])));
+}
+function wrap(block,from,to,nid){ // wrap the text between two offsets of a block, across inline tags
+  const w=document.createTreeWalker(block,NodeFilter.SHOW_TEXT); let pos=0, n; const hits=[];
+  while((n=w.nextNode())){ const len=n.nodeValue.length, a=Math.max(from,pos), b=Math.min(to,pos+len);
+    if(a<b) hits.push([n,a-pos,b-pos]); pos+=len; }
+  hits.forEach(([node,a,b])=>{ const r=document.createRange(); r.setStart(node,a); r.setEnd(node,b);
+    const m=document.createElement('mark'); m.dataset.n=nid; r.surroundContents(m); });
+}
+function readSelection(){
+  const sel=window.getSelection(), t=$('text');
+  if(!t||!sel||sel.isCollapsed||!sel.rangeCount) return null;
+  const r=sel.getRangeAt(0); if(!t.contains(r.startContainer)) return null;
+  let b=r.startContainer; while(b&&b.parentNode!==t) b=b.parentNode; if(!b) return null;
+  const pre=document.createRange(); pre.selectNodeContents(b); pre.setEnd(r.startContainer,r.startOffset);
+  const inb=r.cloneRange(); if(!b.contains(r.endContainer)) inb.setEnd(b,b.childNodes.length); // a note belongs to one paragraph
+  const quote=inb.toString(); if(!quote.trim()) return null;
+  const lead=quote.length-quote.trimStart().length;
+  return {para:blocks().indexOf(b),start:pre.toString().length+lead,quote:quote.trim().slice(0,1200)};
+}
+function hideSel(){ $('selbar').style.display='none'; pending=null; }
+document.addEventListener('selectionchange',()=>{ clearTimeout(hideSel._h); hideSel._h=setTimeout(()=>{
+  if($('sheet').style.display==='flex'||held) return;
+  const s=S&&S.current?readSelection():null; if(s){ pending=s; $('selbar').style.display='flex'; } else hideSel(); },180); });
+let held=null; // on a phone, touching the button can clear the selection before the click lands
+$('selbtn').addEventListener('pointerdown',e=>{ held=pending||readSelection(); if(e.pointerType==='mouse') e.preventDefault(); });
+$('selbtn').addEventListener('mousedown',e=>e.preventDefault());
+$('selbtn').addEventListener('click',()=>{ const p=held||pending; held=null; if(p) openSheet({new:true,chapter:S.current,...p,body:''}); });
+function openSheet(n){ if(!n) return; editing=n; hideSel();
+  $('sh-q').style.display=n.quote?'block':'none'; $('sh-q').textContent=n.quote?'“'+n.quote+'”':'';
+  $('sh-t').value=n.body||''; $('sh-del').style.display=n.new?'none':'inline-block';
+  $('sheet').style.display='flex'; setTimeout(()=>$('sh-t').focus(),50); }
+function closeSheet(){ $('sheet').style.display='none'; editing=null; const s=window.getSelection(); if(s) s.removeAllRanges(); }
+$('sh-cancel').addEventListener('click',closeSheet);
+$('sheet').addEventListener('click',e=>{ if(e.target===$('sheet') && $('sh-t').value.trim()===((editing&&editing.body)||'')) closeSheet(); }); // a stray tap never discards typing
+$('sh-save').addEventListener('click',()=>{ const body=$('sh-t').value.trim(), n=editing; if(!n) return;
+  if(!body){ $('sh-t').focus(); return; }
+  if(!putNote(n.new?{id:uuid(),chapter:n.chapter,para:n.para,start:n.start,quote:n.quote,body}:{...n,body})) return;
+  closeSheet(); paint(); saidSaved(); });
+$('sh-del').addEventListener('click',()=>{ const n=editing; if(!n||n.new) return; putNote({...n,deleted:true}); closeSheet(); paint(); });
+function putNote(n){ const had=S.notes[n.id];
+  n.updated=new Date().toISOString(); n.at=n.at||n.updated; n.synced=false; delete n.new; S.notes[n.id]=n;
+  if(!persist()){ if(had) S.notes[n.id]=had; else delete S.notes[n.id];
+    toast('This device would not store the note (private browsing, or storage is full). Your words are still in the box: copy them somewhere safe.',9000); return false; }
+  flush(); return true; }
+function saidSaved(){ const first=!S.tipped&&canBackUp(); if(first){ S.tipped=true; persist(); }
+  toast(first?'Saved. Thank you. Tip: “Your shelf” has a personal link that brings your shelf and notes to any device.':'Saved. Thank you.',first?7000:3200); }
+
+/* ---------- backend (optional): Supabase functions from reader/supabase.sql ---------- */
+function backend(){ const c=DATA.config||{}; return c.supabaseUrl&&c.supabaseKey?c:null; }
+async function rpc(fn,args){ const c=backend(); if(!c) throw new Error('offline');
+  const h={'Content-Type':'application/json',apikey:c.supabaseKey}; if(/^eyJ/.test(c.supabaseKey)) h.Authorization='Bearer '+c.supabaseKey;
+  const r=await fetch(c.supabaseUrl.replace(/\/$/,'')+'/rest/v1/rpc/'+fn,{method:'POST',headers:h,body:JSON.stringify(args)});
+  if(!r.ok) throw new Error((await r.text()).slice(0,200)); const t=await r.text(); return t?JSON.parse(t):null; }
+async function key(){ if(noteKey) return noteKey; const k=(DATA.config||{}).notesKey; if(!k) return null;
+  return noteKey=await crypto.subtle.importKey('raw',unb64(k),'AES-GCM',false,['encrypt','decrypt']); }
+async function seal(o){ const k=await key(), iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},k,new TextEncoder().encode(JSON.stringify(o))));
+  const out=new Uint8Array(12+ct.length); out.set(iv); out.set(ct,12); return b64(out); }
+async function unseal(s){ const b=unb64(s), k=await key();
+  return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b.slice(0,12)},k,b.slice(12)))); }
+const canBackUp=()=>!!(backend()&&(DATA.config||{}).notesKey);
+const stateOut=()=>({read:S.read,offered:S.offered,current:S.current});
+async function pushState(){ if(!backend()||!S.token||!S.name) return;
+  try{ await rpc('library_push',{p_token:S.token,p_name:S.name,p_state:stateOut()}); }catch(e){} }
+// Notes go up one at a time, oldest change first, so a slow request can never land on top of a newer one.
+let flushing=false;
+async function flush(){ if(flushing||!canBackUp()||!S.token) return; flushing=true;
+  try{ for(;;){ const tok=S.token, n=Object.values(S.notes).filter(x=>!x.synced).sort((a,b)=>a.updated<b.updated?-1:1)[0]; if(!n) break;
+      const stamp=n.updated;
+      await rpc('library_note',{p_token:tok,p_id:n.id,p_chapter:n.chapter,p_deleted:!!n.deleted,p_at:stamp,
+        p_payload:await seal({para:n.para,start:n.start,quote:n.quote,body:n.body,at:n.at,title:(CH[n.chapter]||{}).title||''})});
+      if(S.token!==tok) break;                                           // the reader changed mid-flight
+      const cur=S.notes[n.id]; if(cur&&cur.updated===stamp){ cur.synced=true; persist(); } } }
+  catch(e){}                                                             // offline or refused: stays unsynced, retried below
+  flushing=false; }
+window.addEventListener('online',flush);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&S) flush(); });
+setInterval(()=>{ if(S&&Object.values(S.notes).some(n=>!n.synced)) flush(); },30000);
+async function pull(replace){ // merge what the server knows about this reader into this browser
+  if(!backend()||!S.token) return;
+  const tok=S.token;
+  try{ const r=await rpc('library_pull',{p_token:tok}); if(!r||S.token!==tok) return;
+    if(r.name&&(!S.name||replace)) S.name=r.name;
+    const st=r.state||{}; (st.read||[]).forEach(x=>{ if(!hasRead(x.id)) S.read.push(x); });
+    S.read.sort((a,b)=>a.at<b.at?-1:1);
+    if(replace){ S.offered=st.offered||[]; S.current=st.current||null; }
+    for(const n of r.notes||[]){
+      let o; try{ o=await unseal(n.payload); }catch(e){ continue; }
+      if(S.token!==tok) return;
+      const mine=S.notes[n.id];                                          // looked up AFTER the await: the reader may have typed meanwhile
+      if(mine&&(!mine.synced||Date.parse(mine.updated||0)>=Date.parse(n.updated_at||0))) continue; // dates, not strings: the server formats them differently
+      try{ S.notes[n.id]={id:n.id,chapter:n.chapter,para:o.para,start:o.start,quote:o.quote,body:o.body,
+        at:o.at,updated:new Date(n.updated_at).toISOString(),deleted:n.deleted,synced:true}; }catch(e){} }
+    persist();
+  }catch(e){}
+  flush();
+}
+
+/* ---------- author: every reader's notes, for Clay ---------- */
+function author(){
+  chrome(false);
+  main.innerHTML=`<h1 style="margin-bottom:1em">Readers’ notes</h1><p class="quiet">For Clay. Enter the author key.</p>
+    <input type="password" id="ak" autocomplete="off"><div class="row" style="margin-top:14px"><button class="btn" id="ago">Open</button>
+    <button class="btn ghost" id="aback">Back to reading</button></div><div id="aout" class="au"></div>`;
+  $('aback').addEventListener('click',()=>{ history.replaceState(null,'',location.pathname); route(); });
+  const go=async()=>{ const out=$('aout');
+    if(!backend()){ out.innerHTML='<p class="quiet">The notes database is not connected yet (reader/config.json has no Supabase settings), so notes are only in each reader’s own browser.</p>'; return; }
+    out.innerHTML='<p class="quiet">Opening…</p>';
+    try{ const r=await rpc('library_author',{p_key:$('ak').value.trim()}); sessionStorage.setItem('library-author',$('ak').value.trim());
+      const who={}; r.readers.forEach(x=>who[x.rid]=x);
+      const notes=[]; for(const n of r.notes){ try{ const o=await unseal(n.payload);
+        notes.push({id:n.id,rid:n.rid,chapter:String(n.chapter),created_at:n.created_at,para:+o.para||0,start:+o.start||0,
+          quote:String(o.quote||''),body:String(o.body||''),title:String(o.title||'')}); }catch(e){} }
+      const group=new Map(); notes.forEach(n=>{ if(!group.has(n.chapter)) group.set(n.chapter,[]); group.get(n.chapter).push(n); });
+      const byCh=new Proxy({}, {get:(_,k)=>group.get(k)});
+      const order=[...DATA.order.filter(id=>group.has(id)),...[...group.keys()].filter(id=>!DATA.order.includes(id))];
+      const readOf=x=>{ const a=(x.state||{}).read; return Array.isArray(a)?a.filter(y=>y&&typeof y.id==='string'):[]; };
+      const title=id=>(CH[id]||{}).title||(byCh[id][0].title||id)+' (no longer shared)';
+      const d=t=>new Date(t).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+      let md='# Readers’ notes · '+new Date().toLocaleDateString()+'\n';
+      let html=`<h2>Readers · ${r.readers.length}</h2>`+r.readers.map(x=>`<div class="n"><div>${esc(x.name||'(no name yet)')}</div>
+        <div class="by">${readOf(x).length} chapters read · last here ${d(x.seen_at)}</div>
+        <div class="quiet">${readOf(x).map(y=>esc((CH[y.id]||{}).title||y.id)).join(' · ')}</div></div>`).join('');
+      order.forEach(id=>{ html+=`<h2>${esc(title(id))} · ${byCh[id].length}</h2>`; md+='\n## '+title(id)+'\n';
+        byCh[id].sort((a,b)=>(a.para-b.para)||(a.start-b.start)).forEach(n=>{ const nm=(who[n.rid]||{}).name||n.rid;
+          html+=`<div class="n">${n.quote?`<blockquote>“${esc(n.quote)}”</blockquote>`:''}<div style="white-space:pre-wrap">${esc(n.body)}</div><div class="by">${esc(nm)} · ${d(n.created_at)}${n.para<0?' · on the whole chapter':''}</div></div>`;
+          md+='\n'+(n.quote?'> “'+n.quote.replace(/\n/g,' ')+'”\n\n':'')+n.body+'\n— '+nm+', '+d(n.created_at)+(n.para<0?' (whole chapter)':'')+'\n'; }); });
+      if(!notes.length) html+='<p class="quiet" style="margin-top:2em">No notes yet.</p>';
+      out.innerHTML=`<div class="row" style="margin-top:1.6em"><button class="btn ghost" id="amd">Copy everything as Markdown</button></div>`+html;
+      $('amd').addEventListener('click',()=>copy(md,'Copied.'));
+    }catch(e){ out.innerHTML=`<p class="quiet">${/not the author/.test(e.message)?'That key did not open it.':'Could not load the notes: '+esc(e.message)}</p>`; } };
+  $('ago').addEventListener('click',go); $('ak').addEventListener('keydown',e=>{ if(e.key==='Enter') go(); });
+  const k=sessionStorage.getItem('library-author'); if(k){ $('ak').value=k; go(); } else $('ak').focus();
+}
+
+/* ---------- routing + boot ---------- */
+async function route(){
+  const h=decodeURIComponent(location.hash.slice(1));
+  if(h==='author') return author();
+  if(h.startsWith('me=')){ const t=h.slice(3); history.replaceState(null,'',location.pathname);
+    if(/^[\w-]{20,80}$/.test(t)&&t!==S.token){
+      let r=null; try{ r=await rpc('library_pull',{p_token:t}); }catch(e){}
+      if(!r||!r.name){ toast(backend()?'That personal link is not known to the Library. Nothing here was changed.':'Personal links need the Library’s backup, which is not connected yet.',6000); }
+      else{ if(S.token&&(S.read.length||Object.keys(S.notes).length)){ try{ localStorage.setItem(LS+'-was-'+S.token.slice(0,8),JSON.stringify(S)); }catch(e){} } // set aside, never destroyed
+        S=Object.assign(S,{token:t,name:'',read:[],offered:[],current:null,notes:{}}); persist(); await pull(true); } }
+    else if(t===S.token) await pull(false); }
+  if(!S.name) return welcome();
+  if(h.startsWith('c=')){ history.replaceState(null,'',location.pathname); const id=h.slice(2); if(CH[id]) return open(id); toast('That chapter is not on the shelves any more.'); }
+  if(S.current&&CH[S.current]) return open(S.current);
+  offer();
+}
+$('home').addEventListener('click',shelf); $('toshelf').addEventListener('click',shelf);
+window.addEventListener('hashchange',()=>{ if(DATA) route(); });
+async function boot(data){ DATA=data; CH=DATA.chapters; load();
+  const want=location.hash; if(S.name&&!/^#me=/.test(want)) await Promise.race([pull(false),new Promise(r=>setTimeout(r,2500))]);
+  route(); }
+async function deriveKey(pw,salt){
+  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:310000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']); }
+async function unlock(pw){
+  const res=await fetch('data.enc',{cache:'no-store'}); if(!res.ok) throw new Error('missing');
+  const b=new Uint8Array(await res.arrayBuffer()), k=await deriveKey(pw,b.slice(0,16));
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b.slice(16,28)},k,b.slice(28));
+  return JSON.parse(new TextDecoder().decode(plain)); }
+function lock(err){
+  main.innerHTML=`<div class="center" style="margin-top:14vh"><h1 style="margin-bottom:.6em;letter-spacing:.14em">THE LIBRARY</h1>
+    <p class="quiet" style="margin-bottom:2em">${err?'That is not the word.':'Say the word to come in.'}</p>
+    <input type="password" id="pw" placeholder="password" style="max-width:20em;text-align:center" autocomplete="current-password">
+    <label class="chk" style="justify-content:center"><input type="checkbox" id="keep" checked> remember on this device</label>
+    <div style="margin-top:18px"><button class="btn" id="in">Enter</button></div></div>`;
+  const go=async()=>{ const pw=$('pw').value; $('in').disabled=true; $('in').textContent='Opening…';
+    try{ const d=await unlock(pw); if($('keep').checked){ try{ localStorage.setItem(LS+'-pw',pw); }catch(e){} } boot(d); }catch(e){ lock(true); } };
+  $('in').addEventListener('click',go); $('pw').addEventListener('keydown',e=>{ if(e.key==='Enter') go(); }); $('pw').focus();
+}
+(async()=>{ let inline=null; try{ inline=JSON.parse($('data').textContent); }catch(e){}
+  if(inline) return boot(inline);                                   // local preview build
+  let kept=null; try{ kept=localStorage.getItem(LS+'-pw'); }catch(e){}
+  if(kept){ try{ return boot(await unlock(kept)); }catch(e){ try{ localStorage.removeItem(LS+'-pw'); }catch(_){} } }
+  lock(false); })();
+</script>
+</body>
+</html>
