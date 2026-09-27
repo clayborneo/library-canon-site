@@ -142,6 +142,37 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
 .slhead{margin:24px 0 4px;font-size:1rem;letter-spacing:.1em;display:flex;gap:10px;align-items:baseline}
 .slhead .cnt{color:var(--dim);font-size:.75rem;font-family:'Courier New',monospace}
 .swatch{width:12px;height:12px;border-radius:2px;display:inline-block}
+/* timeline */
+.tlbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 12px}
+.tlbar .sel{background:#1c1510;border:1px solid var(--line);color:var(--cream);padding:4px 8px;border-radius:3px;font-family:inherit;font-size:.78rem}
+.tlbar .gap{width:10px}
+.tlsum{color:var(--dim);font-size:.75rem;font-family:'Courier New',monospace;margin:0 0 6px}
+.month{margin:24px 0 6px;font-size:.95rem;letter-spacing:.1em;color:var(--accent);display:flex;gap:10px;align-items:baseline}
+.month .cnt{color:var(--dim);font-size:.72rem;font-family:'Courier New',monospace}
+.srcrow{background:var(--panel);border:1px solid var(--line);border-radius:6px;margin:6px 0;padding:8px 12px}
+.srcrow.dim{opacity:.7}
+.srcrow .shead{display:flex;gap:10px;align-items:baseline;cursor:pointer;flex-wrap:wrap}
+.srcrow .shead:hover .stitle{color:var(--accent)}
+.srcrow .sdate{font-family:'Courier New',monospace;font-size:.75rem;color:var(--dim);min-width:96px;white-space:nowrap}
+.srcrow .sdate.est{color:#b08a4a}
+.srcrow .stitle{flex:1;font-size:.95rem;min-width:200px}
+.srcrow .smeta{font-family:'Courier New',monospace;font-size:.7rem;color:var(--dim);white-space:nowrap}
+.srcrow .smeta a{color:var(--dim)}
+.kind{font-size:.6rem;border:1px solid var(--line);border-radius:8px;padding:0 7px;font-family:'Courier New',monospace;color:var(--dim);white-space:nowrap}
+.kind.voice{color:var(--accent);border-color:var(--accent)}
+.kind.site{color:var(--green);border-color:var(--green)}
+.kind.wait{color:#e08a7a;border-color:#e08a7a}
+.srcrow .sbody{display:none;margin-top:8px}
+.srcrow.open .sbody{display:block}
+.srcrow .snote{color:var(--dim);font-size:.78rem;line-height:1.5;margin:4px 0 8px}
+.passage{background:var(--card);color:var(--ink);border-radius:4px;margin:8px 0;padding:6px 16px 12px;border-left:5px solid #888;font-size:.9rem;line-height:1.55}
+.passage p{margin:.65em 0}
+.passage .src{color:#1E8449;font-family:'Courier New',monospace;font-style:italic;font-size:.78rem}
+.passage .plabel{display:flex;gap:10px;flex-wrap:wrap;font-family:'Courier New',monospace;font-size:.68rem;color:#6b5d42;margin:4px 0 6px;align-items:baseline}
+.passage .plabel .go{color:#1E8449;cursor:pointer;text-decoration:underline dotted}
+.passage .plabel .go:hover{color:#8a6d3b}
+.passage p.hd{font-weight:bold;margin:1.2em 0 .4em}
+.passage .cue{margin:.95em 0}
 @media(max-width:900px){#shelfwrap{grid-template-columns:1fr}#tray{position:static;max-height:none}}
 </style>
 </head>
@@ -160,6 +191,7 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
     <button data-v="storylines">Storylines</button>
     <button data-v="characters">Characters</button>
     <button data-v="drafts">Drafts</button>
+    <button data-v="timeline">Timeline</button>
   </nav>
   <input id="q" placeholder="search everything…">
   <div class="tools">
@@ -995,6 +1027,118 @@ function renderDrafts(){
 }
 
 /* ---------- SEARCH ---------- */
+/* ---------- TIMELINE: every source in the order it entered the Drive ---------- */
+// Data: structure/timeline.json (built by scripts/build_timeline.py from the Drive inventory, the
+// ⟦src⟧ tags in every chapter, the voice-note register and the site-written cards). A "source" is one
+// thing Clay added: a Drive file, one voice recording, or a card written here. Passages are the pieces
+// of each chapter body that came from that source; the split below must match build_timeline.py.
+let tlSort='created', tlDir='asc', tlKind='all', tlCanon='all'; const tlOpen=new Set();
+function tlPassages(body){ return body.split(/\n(?=⟦src)/); }
+function tlDateKey(s){ const iso=tlSort==='modified' ? (s.modified||s.created) : s.created; const ms=iso?Date.parse(iso):NaN; return isNaN(ms)?null:ms; }
+function tlMonth(ms){ return new Date(ms).toLocaleString('en-US',{month:'long',year:'numeric',timeZone:'UTC'}); }
+function tlDay(s){ const ms=tlDateKey(s); if(ms===null) return 'undated'; const d=new Date(ms);
+  if(s.date_quality==='estimated') return '≈ '+d.toLocaleString('en-US',{month:'short',year:'numeric',timeZone:'UTC'});
+  return (s.date_quality==='observed'?'≤ ':'')+d.toISOString().slice(0,10); }
+function attr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function tlSafeUrl(u){ return typeof u==='string' && /^https:\/\/(docs|drive)\.google\.com\//.test(u) ? u : ''; }
+function tlKindLabel(s){ return {doc:'Google Doc',sheet:'Sheet',slides:'Slides',docx:'Word',md:'markdown',pdf:'PDF',txt:'text',
+  form:'Form',voice:'voice note',site:'written here',unknown:'source unknown',other:'file'}[s.kind]||s.kind; }
+function tlSummary(T){
+  const inC=T.sources.filter(s=>s.in_canon).length, drive=T.sources.filter(s=>s.group==='drive'&&s.kind!=='unknown'&&s.status!=='local').length, fk=T.sources.filter(s=>s.status==='fork').length;
+  const vn=T.sources.filter(s=>s.group==='voice'), wait=vn.filter(s=>s.status==='unprocessed').length;
+  let html=`<div class="tlsum">${T.sources.length} sources · ${inC} feed the canon · ${drive} Drive files · ${vn.length} voice recordings${fk?` · ${fk} written in working drafts`:''}`;
+  if(T.otter) html+=` (Otter doc: ${T.otter.total} recordings, ${T.otter.processed} processed${wait?`, <span style="color:#e08a7a">${wait} waiting for /notes</span>`:''})`;
+  html+=` · built ${(T.generated||'').slice(0,10)}</div>`; return html; }
+function renderTimeline(){
+  const m=document.getElementById('main'); const T=DATA.timeline;
+  if(!T){ m.innerHTML='<div class="legend">No timeline yet: run scripts/build_timeline.py and rebuild.</div>'; return; }
+  let html=`<div class="legend">Everything you have added, in the order it entered your Drive. Dates are the file's Drive
+    <b>created</b> date (switch to last-edited below). Voice notes carry no dates of their own: the first 39 are dated from the old
+    nightly job's log (≤ = in the Doc by that day), the rest are <span style="color:#b08a4a">≈ estimates</span> spread evenly between
+    the days a /notes run counted the Doc, so a month there is a guess, not a record. Open a row to read exactly the passages that came from that source; “open card” jumps to the chapter.</div>`;
+  html+=tlSummary(T);
+  html+=`<div class="tlbar">
+    <select class="sel" id="tl-sort"><option value="created"${tlSort==='created'?' selected':''}>date added</option><option value="modified"${tlSort==='modified'?' selected':''}>last edited</option></select>
+    <select class="sel" id="tl-dir"><option value="asc"${tlDir==='asc'?' selected':''}>oldest first</option><option value="desc"${tlDir==='desc'?' selected':''}>newest first</option></select>
+    <span class="gap"></span>
+    ${[['all','all'],['drive','Drive files'],['voice','voice notes'],['site','written here']].map(([k,l])=>`<span class="chip${tlKind===k?' on':''}" data-k="${k}">${l}</span>`).join('')}
+    <span class="gap"></span>
+    ${[['all','in canon or not'],['yes','in canon'],['no','not in canon']].map(([k,l])=>`<span class="chip${tlCanon===k?' on':''}" data-c="${k}">${l}</span>`).join('')}
+  </div>`;
+  let rows=T.sources.filter(s=>(tlKind==='all'||s.group===tlKind)&&(tlCanon==='all'||(tlCanon==='yes')===!!s.in_canon));
+  const dated=rows.filter(s=>tlDateKey(s)!==null), undated=rows.filter(s=>tlDateKey(s)===null);
+  dated.sort((a,b)=>{ const c=(tlDateKey(a)-tlDateKey(b))||((a.n||0)-(b.n||0))||a.title.localeCompare(b.title)||a.key.localeCompare(b.key); return tlDir==='asc'?c:-c; });
+  let last=null, monthCount={};
+  dated.forEach(s=>{ const k=tlMonth(tlDateKey(s)); monthCount[k]=(monthCount[k]||0)+1; });
+  dated.forEach(s=>{ const mo=tlMonth(tlDateKey(s));
+    if(mo!==last){ html+=`<div class="month">${mo}<span class="cnt">${monthCount[mo]} source${monthCount[mo]===1?'':'s'}</span></div>`; last=mo; }
+    html+=tlRowHTML(s); });
+  if(undated.length){ html+=`<div class="month">Undated<span class="cnt">${undated.length} · nothing dates these</span></div>`;
+    undated.sort((a,b)=>a.title.localeCompare(b.title)).forEach(s=>{ html+=tlRowHTML(s); }); }
+  if(!rows.length) html+='<div class="legend">Nothing matches these filters.</div>';
+  m.innerHTML=html;
+  m.querySelectorAll('.tlbar .chip[data-k]').forEach(c=>c.addEventListener('click',()=>{ tlKind=c.dataset.k; renderTimeline(); }));
+  m.querySelectorAll('.tlbar .chip[data-c]').forEach(c=>c.addEventListener('click',()=>{ tlCanon=c.dataset.c; renderTimeline(); }));
+  document.getElementById('tl-sort').addEventListener('change',e=>{ tlSort=e.target.value; renderTimeline(); });
+  document.getElementById('tl-dir').addEventListener('change',e=>{ tlDir=e.target.value; renderTimeline(); });
+  m.querySelectorAll('.srcrow .shead').forEach(h=>h.addEventListener('click',e=>{
+    if(e.target.closest('a')) return;
+    const row=h.parentElement, key=row.dataset.key, body=row.querySelector('.sbody');
+    if(body.dataset.lazy){ body.innerHTML=tlBodyHTML(T.sources.find(s=>s.key===key)); delete body.dataset.lazy;
+      body.querySelectorAll('.go').forEach(g=>g.addEventListener('click',()=>openChapter(g.dataset.id))); }
+    row.classList.toggle('open'); if(row.classList.contains('open')) tlOpen.add(key); else tlOpen.delete(key); }));
+  m.querySelectorAll('.srcrow').forEach(row=>{ if(tlOpen.has(row.dataset.key)) row.querySelector('.shead').click(); });
+}
+function tlRowHTML(s){
+  const words=s.words?`${s.words>=1000?Math.round(s.words/100)/10+'k':s.words}w`:'';
+  const cards=s.chapters&&s.chapters.length?` · ${s.chapters.length} card${s.chapters.length===1?'':'s'}`:'';
+  const pas=s.passages?`${s.passages} passage${s.passages===1?'':'s'} · `:'';
+  let status='';
+  if(s.status==='unprocessed') status='<span class="kind wait">waiting for /notes</span>';
+  else if(s.status==='routed') status=`<span class="kind">→ ${esc(s.routed||'another project')}</span>`;
+  else if(s.status==='old-pipeline') status='<span class="kind">old nightly job</span>';
+  else if(s.status==='fork') status='<span class="kind site">in a working draft</span>';
+  else if(!s.in_canon) status='<span class="kind">not in canon</span>';
+  const url=tlSafeUrl(s.url), link=url?` · <a href="${attr(url)}" target="_blank" rel="noopener" title="open in Drive">↗</a>`:'';
+  return `<div class="srcrow${s.in_canon?'':' dim'}" data-key="${attr(s.key)}">
+    <div class="shead"><span class="sdate${s.date_quality==='estimated'?' est':''}" title="${attr(s.date_note||'')}">${tlDay(s)}</span>
+      <span class="stitle">${esc(s.title)}</span>
+      <span class="kind ${s.group}">${tlKindLabel(s)}</span>${status}
+      <span class="smeta">${pas}${words}${cards}${link}</span></div>
+    <div class="sbody" data-lazy="1"></div></div>`;
+}
+function tlBodyHTML(s){
+  let html='';
+  const notes=[];
+  if(s.path) notes.push('Drive: '+esc(s.path));
+  if(s.modified) notes.push('last edited '+s.modified.slice(0,10));
+  if(s.date_note) notes.push(esc(s.date_note));
+  if(s.note) notes.push(esc(s.note));
+  if(s.matched) notes.push('tag names matched by: '+Object.entries(s.matched).map(([k,v])=>`“${esc(k)}” (${esc(v)})`).join('; '));
+  if(notes.length) html+=`<div class="snote">${notes.join(' · ')}</div>`;
+  if(s.snippet) html+=`<div class="passage"><div class="plabel">opening words · full transcript stays in the Otter doc until /notes files it</div>${renderText(s.snippet)}</div>`;
+  (s.chapters||[]).forEach(ch=>{ const c=CH[ch.id];
+    if(!c){ html+=`<div class="snote">Card ${esc(ch.id)} is no longer in the canon.</div>`; return; }
+    const col=SLCOLOR[c.storyline]||'#888', go=`<span class="go" data-id="${attr(c.id)}">open card</span>`;
+    if(ch.blob && c.blob && ch.blob!==c.blob){ // the card changed since the timeline was built: indices could point at the wrong text
+      html+=`<div class="passage" style="border-left-color:${col}"><div class="plabel"><span>${esc(SLNAME[c.storyline]||c.storyline)} · card “${esc(c.title)}”</span>${go}</div><p class="src">This card changed after the timeline was built, so its passages are not shown here until the site rebakes (about a minute after a save).</p></div>`; return; }
+    if(ch.whole){ html+=`<div class="passage" style="border-left-color:${col}"><div class="plabel"><span>${esc(SLNAME[c.storyline]||c.storyline)} · card “${esc(c.title)}” · whole card</span>${go}</div>${renderText(c.body)}</div>`; return; }
+    const parts=tlPassages(c.body);
+    (ch.passages||[]).forEach(i=>{ const txt=parts[i]; if(txt===undefined) return;
+      html+=`<div class="passage" style="border-left-color:${col}"><div class="plabel"><span>${esc(SLNAME[c.storyline]||c.storyline)} · card “${esc(c.title)}”${parts.length>1?` · passage ${i+1} of ${parts.length}`:''}</span>${go}</div>${renderText(txt)}</div>`; });
+  });
+  if(!html) html='<div class="snote">Nothing from this source is in the canon yet.</div>';
+  return html;
+}
+function openChapter(id){
+  if(!CH[id]) return; view='storylines'; query=''; document.getElementById('q').value='';
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x.dataset.v==='storylines'));
+  render(); const card=document.querySelector(`.card[data-id="${id}"]`); if(!card) return;
+  if(!card.classList.contains('open')) card.querySelector('.head').click();
+  card.scrollIntoView({block:'start'}); window.scrollBy(0,-(document.querySelector('header').offsetHeight+8));
+  history.replaceState(null,'','#ch='+encodeURIComponent(id));
+}
+
 function renderSearch(){
   const m=document.getElementById('main'); const q=query.toLowerCase();
   const hits=Object.values(CH).filter(c=>c.title.toLowerCase().includes(q)||c.body.toLowerCase().includes(q)).slice(0,80);
@@ -1009,7 +1153,7 @@ function render(){
     const fk=view==='drafts'&&activeFork&&getFork(activeFork);
     return fk?renderFork(fk):renderSearch(); } // a working draft searches its own copies, never canon
   if(view==='shelf')renderShelf(); else if(view==='storylines')renderStorylines();
-  else if(view==='drafts')renderDrafts(); else renderCharacters();
+  else if(view==='drafts')renderDrafts(); else if(view==='timeline')renderTimeline(); else renderCharacters();
 }
 document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>{
   view=b.dataset.v; query=''; document.getElementById('q').value='';
@@ -1107,11 +1251,12 @@ function boot(data){
   activeFork=localStorage.getItem('library-canon-active-fork');
   if(!getFork(activeFork)) activeFork=null;
   const h=location.hash.replace('#','');
-  if(['storylines','characters','drafts'].includes(h)){ view=h;
+  if(['storylines','characters','drafts','timeline'].includes(h)){ view=h;
     document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x.dataset.v===h)); }
   if(h&&h.startsWith('char=')){ view='characters'; window._char=decodeURIComponent(h.slice(5));
     document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x.dataset.v==='characters')); }
   render();
+  if(h&&h.startsWith('ch=')) openChapter(decodeURIComponent(h.slice(3)));
 }
 
 /* ---------- boot: inline data (local build) or encrypted fetch (public site) ---------- */
