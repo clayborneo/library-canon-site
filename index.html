@@ -1097,6 +1097,7 @@ function tlRowHTML(s){
   if(s.status==='unprocessed') status='<span class="kind wait">waiting for /notes</span>';
   else if(s.status==='routed') status=`<span class="kind">→ ${esc(s.routed||'another project')}</span>`;
   else if(s.status==='old-pipeline') status='<span class="kind">old nightly job</span>';
+  else if(s.status==='notes') status='<span class="kind">in NOTES.md</span>';
   else if(s.status==='fork') status='<span class="kind site">in a working draft</span>';
   else if(!s.in_canon) status='<span class="kind">not in canon</span>';
   const url=tlSafeUrl(s.url), link=url?` · <a href="${attr(url)}" target="_blank" rel="noopener" title="open in Drive">↗</a>`:'';
