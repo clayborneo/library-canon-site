@@ -59,6 +59,11 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
 .star.on{color:#c98f1b}
 .dact{background:none;border:1px solid var(--line);color:var(--dim);padding:2px 10px;font-size:.7rem;
   cursor:pointer;border-radius:3px;font-family:'Courier New',monospace;margin-left:6px}
+/* Claude's notes: anything on this site that Clay did not write is RED (author: claude), Clay's rule 2026-09-27 */
+.card.claude{border-left-color:#b3261e;background:#fbf1ee}
+.card.claude .ttl,.card.claude .body,.card.claude .body p,.card.claude .body .hd{color:#b3261e}
+.card.claude .head:hover{background:#f6e3de}
+.badge.cl{color:#fff;border-color:#b3261e;background:#b3261e}
 /* working drafts (forks) */
 .badge{font-size:.6rem;border:1px solid;border-radius:8px;padding:0 6px;font-family:'Courier New',monospace;white-space:nowrap}
 .badge.ed{color:#8a5a12;border-color:#c9a25a;background:#f7e6bd}
@@ -231,11 +236,11 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
 <script>
 const SLCOLOR = {MOG:'#a67c52', SHALLA:'#c2a878', AI:'#d98fa6', SNOG:'#7d8ca3', PB:'#3fa8a0',
   SM:'#8a7bc8', MOUTH:'#c25b4e', META:'#3f9142', WORLD:'#6b7f6a', CHARACTERS:'#b0876b',
-  NONCORE:'#996f8e', VOICE:'#d9a441'};
+  NONCORE:'#996f8e', VOICE:'#d9a441', PHIL:'#5b7a99'};
 const SLNAME = {MOG:'Mog', SHALLA:'Shalla Shalla', AI:'Animal Intimacies', SNOG:'Snog Mysteries',
   PB:'The Painted Blade', SM:'Something Moving', MOUTH:'The Mouth', META:'The Meta-Frame',
-  WORLD:'World Doc', CHARACTERS:'Character Compendium', NONCORE:'Non-Core Storylines', VOICE:'Voice Notes (unplaced)'};
-const SLORDER = ['MOG','SHALLA','AI','SNOG','PB','SM','MOUTH','META','WORLD','CHARACTERS','NONCORE','VOICE'];
+  WORLD:'World Doc', CHARACTERS:'Character Compendium', NONCORE:'Non-Core Storylines', VOICE:'Voice Notes (unplaced)', PHIL:'Philosophy'};
+const SLORDER = ['MOG','SHALLA','AI','SNOG','PB','SM','MOUTH','META','WORLD','CHARACTERS','NONCORE','PHIL','VOICE'];
 
 let DATA=null, CH=null, books=null, drafts=null, activeDraft=null, PW=null, TOKEN=null;
 let forks=null, activeFork=null, forkFilter='all', composerTarget=null;
@@ -427,7 +432,7 @@ function rememberForkCard(fid,key){ const ov=lsGet('library-canon-fork-edits',{}
   const seen=prev?[...(prev.seen||[]),cardSig(prev.card)].slice(-20):[(forkBaked[fid]||{})[key]||'none'];
   (ov[fid]=ov[fid]||{})[key]={card:{...forkCards[fid][key]},ts:now,seen};
   lsSet('library-canon-fork-edits',ov); }
-function copyOfSource(e,s){ return {key:e.key,file:e.file,source:e.source,title:s.title,title_status:s.title_status,
+function copyOfSource(e,s){ return {key:e.key,file:e.file,source:e.source,title:s.title,title_status:s.title_status,author:s.author,
   storyline:s.storyline,characters:s.characters,maturity:s.maturity,words:s.words,body:s.body,
   draft_changed:false,src_changed:false}; }
 async function ensureFork(id){
@@ -642,13 +647,13 @@ function forkHeadInner(c,cut,shared){
   const badge={own:'<span class="badge own">draft only</span>',edited:'<span class="badge ed">edited</span>',
     source:'<span class="badge sc">source changed</span>',orphan:'<span class="badge sc">source gone</span>',
     both:'<span class="badge ed">edited</span><span class="badge sc">source changed</span>',same:''}[st];
-  return `${cut?'':'<span class="grip">⠿</span>'}<span class="ttl">${esc(c.title)}${ph}</span>${shared?'<span class="badge own" title="On the readers’ site">shared</span>':''}${badge}
+  return `${cut?'':'<span class="grip">⠿</span>'}<span class="ttl">${esc(c.title)}${ph}</span>${c.author==='claude'?'<span class="badge cl" title="Written by Claude, not by Clay">CLAUDE</span>':''}${shared?'<span class="badge own" title="On the readers’ site">shared</span>':''}${badge}
       <span class="meta">${esc(c.storyline)} · ${c.words}w</span>`;
 }
 function forkCardHTML(f,e,cut,draggable){
   const c=forkCards[f.id][e.key];
   if(!c) return `<div class="card"><div class="head"><span class="ttl">${esc(e.file)}</span><span class="meta">still building · reload in a minute</span></div></div>`;
-  return `<div class="card fcard${cut?' cutcard':''}" data-fk="${e.key}" ${draggable?'draggable="true"':''} style="border-left-color:${SLCOLOR[c.storyline]||'#888'}">
+  return `<div class="card fcard${cut?' cutcard':''}${c.author==='claude'?' claude':''}" data-fk="${e.key}" ${draggable?'draggable="true"':''} style="border-left-color:${c.author==='claude'?'#b3261e':(SLCOLOR[c.storyline]||'#888')}">
     <div class="head">${forkHeadInner(c,cut||!draggable,!cut&&e.share)}</div><div class="body" data-lazy="1"></div></div>`;
 }
 function forkChanged(f){ return f.cards.filter(e=>{ const c=forkCards[f.id][e.key]; return c&&!['same','own'].includes(forkState(c)); }); }
@@ -884,9 +889,10 @@ function cardHTML(id, draggable){
   const ph = c.title_status==='placeholder' ? '<span class="ph" title="Claude placeholder title">°</span>' : '';
   const chars = (c.characters||[]).slice(0,4).join(', ');
   const d = drafts&&curDraft(), st = !!(d&&d.chapters.includes(id));
-  return `<div class="card" data-id="${id}" ${draggable?'draggable="true"':''} style="border-left-color:${col}">
+  const cl=c.author==='claude';
+  return `<div class="card${cl?' claude':''}" data-id="${id}" ${draggable?'draggable="true"':''} style="border-left-color:${cl?'#b3261e':col}">
     <div class="head">${draggable?'<span class="grip">⠿</span>':''}
-      <span class="ttl">${esc(c.title)}${ph}</span>
+      <span class="ttl">${esc(c.title)}${ph}</span>${cl?'<span class="badge cl" title="Written by Claude, not by Clay">CLAUDE</span>':''}
       <span class="meta">${c.storyline} · ${c.words}w · ${c.maturity}${chars?' · '+esc(chars):''}</span>
       <span class="star${st?' on':''}" data-id="${id}" title="${st?'In the current draft — click to remove':'Mark ready: add to the current draft'}">${st?'★':'☆'}</span></div>
     <div class="body" data-lazy="1"></div></div>`;
