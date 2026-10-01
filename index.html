@@ -64,6 +64,22 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
 .card.claude .ttl,.card.claude .body,.card.claude .body p,.card.claude .body .hd{color:#b3261e}
 .card.claude .head:hover{background:#f6e3de}
 .badge.cl{color:#fff;border-color:#b3261e;background:#b3261e}
+/* conversations: Muse's running transcript, reviewed and routed by Clay. Red like every other not-Clay text. */
+.talkbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 12px}
+.talkbar .gap{width:10px}
+.talkbar a{color:var(--dim);font-size:.75rem;font-family:'Courier New',monospace}
+.badge.vo{color:#7a2a22;border-color:#d9a79f;background:#f8e4df}
+.badge.wait{color:#8a5a12;border-color:#c9a25a;background:#f7e6bd}
+.talk .route{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 2px;padding-top:10px;border-top:1px dashed #d9a79f}
+.talk .route button{background:none;border:1px solid #b9a87f;color:#6b5d42;padding:3px 12px;font-size:.72rem;cursor:pointer;
+  border-radius:3px;font-family:'Courier New',monospace}
+.talk .route button.primary{background:#1E8449;border-color:#1E8449;color:#fff}
+.card.claude .body .rnote{font-family:'Courier New',monospace;font-size:.75rem;color:#4d4433;margin:10px 0 0;line-height:1.55}
+.card.claude .body .rnote .go{color:#1E8449;cursor:pointer;text-decoration:underline dotted}
+.card.claude .body li{margin:.45em 0}
+.card.claude .body ul{margin:.5em 0;padding-left:1.3em}
+#c-own-row{display:none;font-size:.8rem;color:var(--dim);margin:8px 0 0;line-height:1.5}
+#c-own-row input{width:auto;margin-right:6px}
 /* working drafts (forks) */
 .badge{font-size:.6rem;border:1px solid;border-radius:8px;padding:0 6px;font-family:'Courier New',monospace;white-space:nowrap}
 .badge.ed{color:#8a5a12;border-color:#c9a25a;background:#f7e6bd}
@@ -197,6 +213,7 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
     <button data-v="characters">Characters</button>
     <button data-v="drafts">Drafts</button>
     <button data-v="timeline">Timeline</button>
+    <button data-v="talks">Conversations</button>
   </nav>
   <input id="q" placeholder="search everything…">
   <div class="tools">
@@ -225,6 +242,7 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
   <h3>NEW CARD</h3>
   <div class="crow"><input id="c-title" placeholder="title"><select id="c-sl"></select></div>
   <textarea id="c-body" placeholder="write…"></textarea>
+  <label id="c-own-row"><input type="checkbox" id="c-own">I rewrote this in my own words. Leave it unticked and the card stays red, marked MUSE.</label>
   <div class="mbtns">
     <button class="primary" id="c-save">Save card</button>
     <button id="c-cancel">Cancel</button>
@@ -241,6 +259,10 @@ const SLNAME = {MOG:'Mog', SHALLA:'Shalla Shalla', AI:'Animal Intimacies', SNOG:
   PB:'The Painted Blade', SM:'Something Moving', MOUTH:'The Mouth', META:'The Meta-Frame',
   WORLD:'World Doc', CHARACTERS:'Character Compendium', NONCORE:'Non-Core Storylines', VOICE:'Voice Notes (unplaced)', PHIL:'Philosophy'};
 const SLORDER = ['MOG','SHALLA','AI','SNOG','PB','SM','MOUTH','META','WORLD','CHARACTERS','NONCORE','PHIL','VOICE'];
+
+// Anything Clay did not write is red and badged (his rule, 2026-09-27): frontmatter `author:` says who did.
+const NOTCLAY={claude:['CLAUDE','Written by Claude, not by Clay'],muse:['MUSE','Written down by Muse (an AI), not by Clay']};
+function authorBadge(c){ const a=NOTCLAY[c.author]; return a?`<span class="badge cl" title="${a[1]}">${a[0]}</span>`:''; }
 
 let DATA=null, CH=null, books=null, drafts=null, activeDraft=null, PW=null, TOKEN=null;
 let forks=null, activeFork=null, forkFilter='all', composerTarget=null;
@@ -291,18 +313,26 @@ function rememberEdit(id){ const ov=editsOverlay();
   ov[id]={full:{...CH[id]},ts:Date.now()};
   localStorage.setItem('library-canon-edits',JSON.stringify(ov)); }
 function slugify(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40)||'card'; }
-async function createChapter(title,storyline,body){
+// The file and the in-memory record of a brand-new canon card. opts: {source, author}.
+function chapterDraft(title,storyline,body,opts){
+  opts=opts||{}; title=title.replace(/[\r\n]+/g,' ').trim();
   const now=new Date(), pad=n=>String(n).padStart(2,'0');
   const stamp=`${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
   const id='web-'+stamp, path=`${id}-${slugify(title)}.md`;
-  const front=`---\nid: ${id}\ntitle: "${title.replace(/"/g,'\\"')}"\ntitle_status: clay\nstoryline: ${storyline}\nscene_code: WEB\nsource_doc: "written on the canon site ${now.toISOString().slice(0,10)}"\npassages: 1\ncharacters: []\nmaturity: sketch\nbooks: []\n---\n\n`;
-  const file=front+body.trim()+'\n';
-  await gh(`/repos/${REPO}/contents/chapters/${encodeURIComponent(path)}`,
-    {method:'PUT',body:JSON.stringify({message:'site new card: '+title,content:b64(encTxt(file))})});
-  CH[id]={id,path,title,title_status:'clay',storyline,characters:[],maturity:'sketch',
-    source:'written on the canon site',words:body.trim().split(/\s+/).length,body:body.trim()};
-  rememberEdit(id);
-  return id;
+  const source=(opts.source||'written on the canon site '+now.toISOString().slice(0,10)).replace(/[\r\n]+/g,' ').replace(/"/g,"'"); // one line: this goes into frontmatter
+  const sl=SLORDER.includes(storyline)?storyline:'VOICE';
+  const front=`---\nid: ${id}\ntitle: "${title.replace(/"/g,'\\"')}"\ntitle_status: clay\nstoryline: ${sl}\nscene_code: WEB\nsource_doc: "${source}"\npassages: 1\ncharacters: []\nmaturity: sketch\nbooks: []\n${opts.author==='muse'?'author: muse\n':''}---\n\n`;
+  return {id,path,file:front+body.trim()+'\n',
+    record:{id,path,title,title_status:'clay',storyline:sl,characters:[],maturity:'sketch',author:opts.author==='muse'?'muse':'',
+      source:opts.source||'written on the canon site',words:body.trim().split(/\s+/).length,body:body.trim()}};
+}
+async function createChapter(title,storyline,body,opts){
+  const ch=chapterDraft(title,storyline,body,opts);
+  await gh(`/repos/${REPO}/contents/chapters/${encodeURIComponent(ch.path)}`,
+    {method:'PUT',body:JSON.stringify({message:'site new card: '+ch.record.title,content:b64(encTxt(ch.file))})});
+  CH[ch.id]=ch.record;
+  rememberEdit(ch.id);
+  return ch.id;
 }
 
 async function saveChapter(id,newTitle,newBody){
@@ -647,13 +677,13 @@ function forkHeadInner(c,cut,shared){
   const badge={own:'<span class="badge own">draft only</span>',edited:'<span class="badge ed">edited</span>',
     source:'<span class="badge sc">source changed</span>',orphan:'<span class="badge sc">source gone</span>',
     both:'<span class="badge ed">edited</span><span class="badge sc">source changed</span>',same:''}[st];
-  return `${cut?'':'<span class="grip">⠿</span>'}<span class="ttl">${esc(c.title)}${ph}</span>${c.author==='claude'?'<span class="badge cl" title="Written by Claude, not by Clay">CLAUDE</span>':''}${shared?'<span class="badge own" title="On the readers’ site">shared</span>':''}${badge}
+  return `${cut?'':'<span class="grip">⠿</span>'}<span class="ttl">${esc(c.title)}${ph}</span>${authorBadge(c)}${shared?'<span class="badge own" title="On the readers’ site">shared</span>':''}${badge}
       <span class="meta">${esc(c.storyline)} · ${c.words}w</span>`;
 }
 function forkCardHTML(f,e,cut,draggable){
   const c=forkCards[f.id][e.key];
   if(!c) return `<div class="card"><div class="head"><span class="ttl">${esc(e.file)}</span><span class="meta">still building · reload in a minute</span></div></div>`;
-  return `<div class="card fcard${cut?' cutcard':''}${c.author==='claude'?' claude':''}" data-fk="${e.key}" ${draggable?'draggable="true"':''} style="border-left-color:${c.author==='claude'?'#b3261e':(SLCOLOR[c.storyline]||'#888')}">
+  return `<div class="card fcard${cut?' cutcard':''}${NOTCLAY[c.author]?' claude':''}" data-fk="${e.key}" ${draggable?'draggable="true"':''} style="border-left-color:${NOTCLAY[c.author]?'#b3261e':(SLCOLOR[c.storyline]||'#888')}">
     <div class="head">${forkHeadInner(c,cut||!draggable,!cut&&e.share)}</div><div class="body" data-lazy="1"></div></div>`;
 }
 function forkChanged(f){ return f.cards.filter(e=>{ const c=forkCards[f.id][e.key]; return c&&!['same','own'].includes(forkState(c)); }); }
@@ -678,7 +708,11 @@ async function busy(btn,fn){
   if(btn.isConnected){ btn.disabled=false; btn.textContent=t; } }
 function openComposer(target){
   composerTarget=target||null;
-  document.querySelector('#composer h3').textContent=composerTarget?'NEW CARD · THIS WORKING DRAFT ONLY':'NEW CANON CARD';
+  const fromTalk=!!(composerTarget&&composerTarget.talk);
+  document.querySelector('#composer h3').textContent=fromTalk?'NEW CANON CARD · FROM A CONVERSATION':composerTarget?'NEW CARD · THIS WORKING DRAFT ONLY':'NEW CANON CARD';
+  document.getElementById('c-own-row').style.display=fromTalk?'block':'none';
+  document.getElementById('c-own').checked=false;
+  if(fromTalk){ document.getElementById('c-title').value=composerTarget.title||''; document.getElementById('c-body').value=composerTarget.body||''; }
   const sel=document.getElementById('c-sl');
   if(!sel.options.length) SLORDER.forEach(sl=>{ const o=document.createElement('option');
     o.value=sl; o.textContent=SLNAME[sl]; if(sl==='VOICE')o.selected=true; sel.appendChild(o); });
@@ -889,11 +923,11 @@ function cardHTML(id, draggable){
   const ph = c.title_status==='placeholder' ? '<span class="ph" title="Claude placeholder title">°</span>' : '';
   const chars = (c.characters||[]).slice(0,4).join(', ');
   const d = drafts&&curDraft(), st = !!(d&&d.chapters.includes(id));
-  const cl=c.author==='claude';
+  const cl=!!NOTCLAY[c.author];
   return `<div class="card${cl?' claude':''}" data-id="${id}" ${draggable?'draggable="true"':''} style="border-left-color:${cl?'#b3261e':col}">
     <div class="head">${draggable?'<span class="grip">⠿</span>':''}
-      <span class="ttl">${esc(c.title)}${ph}</span>${cl?'<span class="badge cl" title="Written by Claude, not by Clay">CLAUDE</span>':''}
-      <span class="meta">${c.storyline} · ${c.words}w · ${c.maturity}${chars?' · '+esc(chars):''}</span>
+      <span class="ttl">${esc(c.title)}${ph}</span>${authorBadge(c)}
+      <span class="meta">${esc(c.storyline)} · ${c.words}w · ${esc(c.maturity)}${chars?' · '+esc(chars):''}</span>
       <span class="star${st?' on':''}" data-id="${id}" title="${st?'In the current draft — click to remove':'Mark ready: add to the current draft'}">${st?'★':'☆'}</span></div>
     <div class="body" data-lazy="1"></div></div>`;
 }
@@ -1146,6 +1180,153 @@ function openChapter(id){
   history.replaceState(null,'','#ch='+encodeURIComponent(id));
 }
 
+/* ---------- CONVERSATIONS: Muse's running transcript, for Clay to review and route ---------- */
+// Data: structure/talks.json (scripts/import_talks.py pulls it from the Google Doc Muse keeps) and
+// structure/talks_review.json (what Clay did with each entry here; one commit per action). An entry is
+// "to review" until it has a card, a note for Claude, or a mark (kept / aside), and again if Muse
+// changes its text afterwards. Nothing here is canon and none of it is Clay's own writing, hence red.
+const TALKS_PATH='structure/talks_review.json';
+let talkRev={}, talkFilter='review'; const talkOpen=new Set();
+function talkDocs(){ return Object.values((DATA.talks&&DATA.talks.docs)||{}); }
+function talkEntries(){ const out=[]; talkDocs().forEach(d=>(d.entries||[]).forEach(e=>out.push({...e,doc:d}))); return out; }
+function initTalks(){
+  talkRev=JSON.parse(JSON.stringify((DATA.talks&&DATA.talks.review&&DATA.talks.review.entries)||{}));
+  // a save made minutes ago shows until the encrypted build carries it (or carries something newer)
+  const b=lsGet('library-canon-talks-saved',{}), keep={};
+  for(const [id,rec] of Object.entries(b)){ const built=talkRev[id];
+    if(rec&&rec.at&&(!built||!built.at||built.at<rec.at)){ talkRev[id]=rec; keep[id]=rec; } }
+  lsSet('library-canon-talks-saved',keep);
+}
+function talkState(e){ const r=talkRev[e.id]||{}, routed=!!(r.card||r.note||r.mark);
+  const changed=routed&&!!r.seen_hash&&r.seen_hash!==e.hash, review=!routed||changed||!!r.reopened;
+  return {r,routed,changed,aside:r.mark==='aside'&&!review,review}; }
+function talkTabCount(){ const b=document.querySelector('nav button[data-v="talks"]'); if(!b) return;
+  const n=DATA&&DATA.talks?talkEntries().filter(e=>!e.removed&&talkState(e).review).length:0;
+  b.style.display=DATA&&DATA.talks?'':'none'; b.textContent='Conversations'+(n?' · '+n:''); }
+// The review file as the repo has it now, with one entry patched (null deletes a field).
+async function talkPatched(id,patch){
+  let cur=null; try{ cur=await readRepoFile(TALKS_PATH); }catch(e){ if(!/^GitHub 404/.test(e.message)) throw e; }
+  const doc=cur?JSON.parse(cur.text):{entries:{}}; doc.entries=doc.entries||{};
+  const rec={...(doc.entries[id]||{}),...patch,at:new Date().toISOString()};
+  Object.keys(rec).forEach(k=>{ if(rec[k]===null) delete rec[k]; });
+  doc.entries[id]=rec;
+  return {sha:cur&&cur.sha,doc,rec,text:JSON.stringify(doc,null,1)+'\n'};
+}
+function talkSaved(id,p){
+  talkRev={...talkRev,...p.doc.entries}; // the repo copy is the truth, including receipts Claude wrote meanwhile
+  const b=lsGet('library-canon-talks-saved',{}); b[id]=p.rec; lsSet('library-canon-talks-saved',b);
+}
+async function saveTalk(id,patch){
+  const p=await talkPatched(id,patch);
+  const payload={message:'site: conversation entry routed ('+id+')',content:b64(encTxt(p.text))};
+  if(p.sha) payload.sha=p.sha;
+  await gh(`/repos/${REPO}/contents/${TALKS_PATH}`,{method:'PUT',body:JSON.stringify(payload)});
+  talkSaved(id,p);
+}
+// A card made from an entry and the entry's pointer to it land in ONE commit, so a dropped
+// connection can never leave a card with no link back (and a retry making a second card).
+async function createTalkCard(target,title,storyline,body,own){
+  const ch=chapterDraft(title,storyline,body,{source:target.source,author:own?'':'muse'});
+  const p=await talkPatched(target.talk,{card:ch.id,seen_hash:target.hash,reopened:null});
+  await commitFiles('site new card from a conversation: '+ch.record.title,
+    [{path:'chapters/'+ch.path,content:ch.file},{path:TALKS_PATH,content:p.text}]);
+  CH[ch.id]=ch.record; rememberEdit(ch.id); talkSaved(target.talk,p);
+  return ch.id;
+}
+function talkVoice(e){ return e.voice==='clay'?'you said, condensed':e.voice==='persona'?esc(e.doc.persona||'the character')+'’s account':'session note'; }
+function talkCardHTML(e){
+  const s=talkState(e), r=s.r; let st='';
+  if(e.removed) st+='<span class="badge sc" title="No longer in the Google Doc; kept here">gone from the doc</span>';
+  if(s.changed) st+='<span class="badge ed" title="Muse changed this entry after you routed it">changed since</span>';
+  if(r.reopened) st+='<span class="badge ed" title="You put this back on the to-review list">back in review</span>';
+  if(r.card) st+='<span class="badge own">card made</span>';
+  if(r.note) st+=r.receipt?'<span class="badge own">note processed</span>':'<span class="badge wait">waiting for Claude</span>';
+  if(r.mark==='kept') st+='<span class="badge own">reviewed</span>';
+  if(r.mark==='aside') st+='<span class="badge sc">set aside</span>';
+  const verdict=e.verdict?` · your verdict: ${esc(e.verdict)}`:'';
+  return `<div class="card claude talk" data-talk="${attr(e.id)}" style="border-left-color:#b3261e">
+    <div class="head"><span class="ttl">${esc(e.label)}</span><span class="badge cl" title="${NOTCLAY.muse[1]}">MUSE</span><span class="badge vo">${talkVoice(e)}</span>${st}
+      <span class="meta">${esc(e.date||'undated')} · ${e.words}w${verdict}</span></div>
+    <div class="body" data-lazy="1"></div></div>`;
+}
+function talkText(body){ // the transcript is mostly short bullet lists
+  const out=[]; let items=[];
+  const flush=()=>{ if(items.length){ out.push('<ul>'+items.map(i=>`<li>${emph(esc(i))}</li>`).join('')+'</ul>'); items=[]; } };
+  body.split(/\n\s*\n/).forEach(p=>{ const m=p.trim().match(/^[-•]\s+([\s\S]+)$/);
+    if(m) items.push(m[1]); else{ flush(); if(p.trim()) out.push(`<p>${emph(esc(p.trim()))}</p>`); } });
+  flush(); return out.join('');
+}
+function talkBodyHTML(e){
+  const s=talkState(e), r=s.r; let h=talkText(e.body);
+  if(e.removed) h+='<div class="rnote">This entry is no longer in the Google Doc. It stays here so nothing disappears.</div>';
+  if(s.changed) h+='<div class="rnote">Muse changed this entry after you routed it. Route it again, or mark it reviewed.</div>';
+  if(r.card) h+=`<div class="rnote">→ canon card: <span class="go" data-id="${attr(r.card)}">${esc(CH[r.card]?CH[r.card].title:r.card)}</span>${CH[r.card]?'':' (the site is still building it, about a minute)'}</div>`;
+  if(r.note) h+=`<div class="rnote">Your note to Claude${r.note_at?' ('+esc(r.note_at.slice(0,10))+')':''}: ${esc(r.note)}<br>${r.receipt?'<b>Processed</b> → '+esc(r.receipt):'<b>Waiting for Claude</b>, picked up at the next check'}</div>`;
+  if(!TOKEN) return h+`<div class="rnote">${PW?'To route this entry, turn editing on (⚙ in the header).':'Routing works on the live site, with editing on.'}</div>`;
+  h+='<div class="route">';
+  h+='<button class="primary" data-act="card" title="Opens the new-card box filled with this entry. The card lands in the Unshelved tray, red and marked MUSE unless you rewrite it.">→ make a canon card</button>';
+  h+=`<button data-act="note" title="Tell Claude where this belongs or what to do with it. Claude answers with a receipt here.">✎ ${r.note&&!r.receipt?'change the note':'note for Claude'}</button>`;
+  if(r.mark!=='kept'||s.changed) h+='<button data-act="kept" title="Read it, nothing to do. It leaves the to-review list.">reviewed, leave it here</button>';
+  if(r.mark!=='aside'||s.changed) h+='<button data-act="aside" title="Not for the canon. It leaves the to-review list and stays readable under “set aside”.">set aside</button>';
+  if(s.routed&&!r.reopened) h+='<button data-act="undo" title="Put it back on the to-review list. Clears the mark and any note Claude has not handled yet; a card already made stays.">↺ back to review</button>';
+  return h+'</div>';
+}
+function renderTalks(){
+  const m=document.getElementById('main'), docs=talkDocs();
+  if(!docs.length){ m.innerHTML='<div class="legend">No conversations pulled yet.</div>'; return; }
+  const q=query.trim().length>1?query.trim().toLowerCase():'';
+  const all=talkEntries(), cnt={review:0,routed:0,aside:0,all:all.length};
+  all.forEach(e=>{ const s=talkState(e); if(s.review&&!e.removed) cnt.review++; else if(s.aside) cnt.aside++; else if(s.routed) cnt.routed++; });
+  const names=docs.map(d=>esc(d.title)).join(', '), who=esc(docs[0].persona||'the character');
+  let html=`<div class="legend"><b>${names}</b>: the running record Muse keeps of your talks. Nothing here is canon until you route it.
+    It is all red because Muse wrote it down, not you: <i>you said</i> entries are your words condensed by Muse, <i>${who}’s account</i> entries are the
+    character talking, <i>session notes</i> are housekeeping. Open an entry, then make a canon card from it, leave Claude a note about where it
+    belongs, mark it reviewed, or set it aside. New entries arrive on their own a few times a day.</div>`;
+  html+='<div class="talkbar">'+[['review','to review'],['routed','routed'],['aside','set aside'],['all','all']].map(([k,l])=>
+    `<span class="chip${talkFilter===k?' on':''}" data-f="${k}">${l} · ${cnt[k]}</span>`).join('')+'<span class="gap"></span>'+
+    docs.map(d=>{ const u=tlSafeUrl(d.url); return `<span class="tlsum" style="margin:0">last pulled ${esc((d.pulled||'').slice(0,10))}${u?` · <a href="${attr(u)}" target="_blank" rel="noopener">open the Google Doc ↗</a>`:''}</span>`; }).join('')+'</div>';
+  const rows=all.filter(e=>{ const s=talkState(e);
+      return talkFilter==='all' || (talkFilter==='review'?(s.review&&!e.removed):talkFilter==='aside'?s.aside:(s.routed&&!s.review&&!s.aside)); })
+    .filter(e=>!q||e.label.toLowerCase().includes(q)||e.body.toLowerCase().includes(q))
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||'')||a.order-b.order);
+  let last=null;
+  rows.forEach(e=>{ const d=e.date||'undated';
+    if(d!==last){ const n=rows.filter(x=>(x.date||'undated')===d).length;
+      html+=`<div class="month">${esc(d)}<span class="cnt">${n} entr${n===1?'y':'ies'}</span></div>`; last=d; }
+    html+=talkCardHTML(e); });
+  if(!rows.length) html+=`<div class="legend">${q?'Nothing here matches “'+esc(query)+'”.':talkFilter==='review'?'Nothing waiting. Everything pulled so far has been routed.':'Nothing in this list.'}</div>`;
+  m.innerHTML=html;
+  m.querySelectorAll('.talkbar .chip').forEach(c=>c.addEventListener('click',()=>{ talkFilter=c.dataset.f; renderTalks(); }));
+  m.querySelectorAll('.card.talk').forEach(card=>{
+    const id=card.dataset.talk, body=card.querySelector('.body');
+    card.querySelector('.head').addEventListener('click',()=>{
+      if(body.dataset.lazy){ body.innerHTML=talkBodyHTML(all.find(x=>x.id===id)); delete body.dataset.lazy; bindTalk(card,all.find(x=>x.id===id)); }
+      card.classList.toggle('open'); if(card.classList.contains('open')) talkOpen.add(id); else talkOpen.delete(id); });
+    if(talkOpen.has(id)) card.querySelector('.head').click(); });
+}
+function bindTalk(card,e){
+  card.querySelectorAll('.go').forEach(g=>g.addEventListener('click',()=>openChapter(g.dataset.id)));
+  card.querySelectorAll('.route button').forEach(btn=>btn.addEventListener('click',()=>{
+    const act=btn.dataset.act, r=talkRev[e.id]||{}, seen={seen_hash:e.hash,reopened:null};
+    if(forkLock){ toast('One moment: still saving the last change.'); return; }
+    if(act==='card'){
+      const ti=document.getElementById('c-title'), bo=document.getElementById('c-body');
+      if((ti.value.trim()||bo.value.trim()) && !confirm('The new-card box still holds unsaved text. Replace it with this entry?')) return;
+      return openComposer({talk:e.id,hash:e.hash,storyline:'META',title:e.label,body:e.body,
+        source:`${e.doc.title}, ${e.date||'undated'}: ${e.label} (written down by Muse)`}); }
+    let patch=null;
+    if(act==='note'){
+      const note=(prompt('What should Claude do with this entry? For example: where it belongs, what it settles, or what to ask you about it.',r.note&&!r.receipt?r.note:'')||'').trim();
+      if(!note) return;
+      patch={...seen,note,note_at:new Date().toISOString(),receipt:null,receipt_at:null}; }
+    else if(act==='kept'||act==='aside') patch={...seen,mark:act};
+    else if(act==='undo') patch={mark:null,reopened:true,...(r.note&&!r.receipt?{note:null,note_at:null}:{})};
+    if(!patch) return;
+    busy(btn,async()=>{ await saveTalk(e.id,patch);
+      toast(act==='note'?'Note saved. Claude picks it up at the next check and answers here.':'Saved.'); talkOpen.add(e.id); render(); });
+  }));
+}
+
 function renderSearch(){
   const m=document.getElementById('main'); const q=query.toLowerCase();
   const hits=Object.values(CH).filter(c=>c.title.toLowerCase().includes(q)||c.body.toLowerCase().includes(q)).slice(0,80);
@@ -1156,6 +1337,8 @@ function renderSearch(){
 
 function render(){
   if(!DATA) return;
+  talkTabCount();
+  if(view==='talks') return renderTalks(); // the search box filters the entries while this tab is open
   if(query.trim().length>1){
     const fk=view==='drafts'&&activeFork&&getFork(activeFork);
     return fk?renderFork(fk):renderSearch(); } // a working draft searches its own copies, never canon
@@ -1201,6 +1384,7 @@ document.getElementById('newcard').addEventListener('click',()=>{
   const fk=view==='drafts'&&activeFork&&getFork(activeFork); // while a working draft is on screen, new cards belong to it
   if(fk){ if(!forkBlocked()) openComposer({fid:fk.id,afterKey:null}); } else openComposer(null); });
 document.getElementById('c-cancel').addEventListener('click',()=>{
+  if(composerTarget&&composerTarget.talk){ document.getElementById('c-title').value=''; document.getElementById('c-body').value=''; } // a prefill, not Clay's typing
   document.getElementById('composer').style.display='none'; });
 document.getElementById('c-save').addEventListener('click',async()=>{
   const t=document.getElementById('c-title').value.trim(), body=document.getElementById('c-body').value;
@@ -1208,12 +1392,15 @@ document.getElementById('c-save').addEventListener('click',async()=>{
   if(forkLock){ toast('One moment: still saving the last change.'); return; }
   const b=document.getElementById('c-save'); b.disabled=true; b.textContent='Saving…'; forkLock=true;
   try{
-    const tf=composerTarget&&getFork(composerTarget.fid);
-    const nk=tf ? await createForkCard(tf, composerTarget.afterKey, t, document.getElementById('c-sl').value, body)
-                : await createChapter(t, document.getElementById('c-sl').value, body);
-    document.getElementById('c-title').value=''; document.getElementById('c-body').value='';
-    document.getElementById('composer').style.display='none';
-    if(tf){ toast('Card added to this working draft only.'); renderFork(tf,nk); }
+    const target=composerTarget, sl=document.getElementById('c-sl').value; // the composer can be re-aimed while this save is in flight
+    const tf=target&&getFork(target.fid), talk=target&&target.talk;
+    const nk=tf ? await createForkCard(tf, target.afterKey, t, sl, body)
+              : talk ? await createTalkCard(target, t, sl, body, document.getElementById('c-own').checked)
+              : await createChapter(t, sl, body);
+    if(composerTarget===target){ document.getElementById('c-title').value=''; document.getElementById('c-body').value='';
+      document.getElementById('composer').style.display='none'; }
+    if(talk){ toast('Card saved. It is at the top of the Unshelved tray, and this entry now points at it.'); talkOpen.add(talk); render(); }
+    else if(tf){ toast('Card added to this working draft only.'); renderFork(tf,nk); }
     else{ toast('Card saved. It is at the top of the Unshelved tray; drag it into a book whenever.'); render(); }
   }catch(e){ toast('Save failed: '+e.message,6000); }
   forkLock=false; b.disabled=false; b.textContent='Save card'; });
@@ -1257,9 +1444,10 @@ function boot(data){
   if(dirtyForkIds.size) markDirty('forks',true);
   activeFork=localStorage.getItem('library-canon-active-fork');
   if(!getFork(activeFork)) activeFork=null;
+  initTalks();
   const h=location.hash.replace('#','');
-  if(['storylines','characters','drafts','timeline'].includes(h)){ view=h;
-    document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x.dataset.v===h)); }
+  if(['storylines','characters','drafts','timeline','talks','conversations'].includes(h)){ view=h==='conversations'?'talks':h;
+    document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x.dataset.v===view)); }
   if(h&&h.startsWith('char=')){ view='characters'; window._char=decodeURIComponent(h.slice(5));
     document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x.dataset.v==='characters')); }
   render();
