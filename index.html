@@ -265,6 +265,9 @@ const NOTCLAY={claude:['CLAUDE','Written by Claude, not by Clay'],muse:['MUSE','
 function authorBadge(c){ const a=NOTCLAY[c.author]; return a?`<span class="badge cl" title="${a[1]}">${a[0]}</span>`:''; }
 
 let DATA=null, CH=null, books=null, drafts=null, activeDraft=null, PW=null, TOKEN=null;
+// PLAIN is flipped to true by plain.js for library.rainbowagama.com, which sits behind Cloudflare Access
+// (Google sign-in, policy "admin only"): no lock screen, data.json and fork-<id>.json fetched in the clear.
+const PLAIN=/*__MODE__*/false;
 let forks=null, activeFork=null, forkFilter='all', composerTarget=null;
 let forkLock=false; // one repo-writing action at a time
 const forkCards={}, forkBaked={}, forkRepoText=new Map(), dirtyForkIds=new Set();
@@ -286,6 +289,7 @@ async function gh(path, opts={}){
   return r.json();
 }
 async function saveToken(tok){
+  if(PLAIN){ localStorage.setItem('library-canon-token',JSON.stringify({plain:tok})); TOKEN=tok; refreshEditUI(); return; }
   const salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12));
   const key=await deriveKey(PW,salt,['encrypt']);
   const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,encTxt(tok)));
@@ -295,14 +299,16 @@ async function saveToken(tok){
 async function loadToken(){
   const j=localStorage.getItem('library-canon-token');
   if(j){
-    try{ const o=JSON.parse(j); const key=await deriveKey(PW,unb64(o.salt),['decrypt']);
-      TOKEN=decTxt(new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(o.iv)},key,unb64(o.ct))));
+    try{ const o=JSON.parse(j);
+      if(PLAIN){ if(!o.plain) throw new Error('token sealed by the password build'); TOKEN=o.plain; }
+      else{ const key=await deriveKey(PW,unb64(o.salt),['decrypt']);
+        TOKEN=decTxt(new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(o.iv)},key,unb64(o.ct)))); }
     }catch(e){ localStorage.removeItem('library-canon-token'); }
   }
   refreshEditUI();
 }
 function refreshEditUI(){
-  if(PW) document.getElementById('settings').style.display='inline';
+  if(PW||PLAIN) document.getElementById('settings').style.display='inline';
   document.getElementById('settings').textContent = TOKEN?'⚙ editing on':'⚙';
   document.getElementById('savegh').style.display =
     (TOKEN && document.getElementById('dirty').style.display!=='none')?'inline':'none';
@@ -469,6 +475,9 @@ async function ensureFork(id){
   if(forkCards[id]) return forkCards[id];
   const f=getFork(id); let cards=null;
   if(DATA.fork_cards&&DATA.fork_cards[id]) cards=JSON.parse(JSON.stringify(DATA.fork_cards[id]));
+  else if(PLAIN){
+    try{ const res=await fetch(id+'.json',{cache:'no-store'}); if(res.ok) cards=await res.json(); }catch(e){}
+  }
   else if(PW){
     try{ const res=await fetch(id+'.enc',{cache:'no-store'});
       if(res.ok) cards=JSON.parse(decTxt(await decryptBytes(PW,new Uint8Array(await res.arrayBuffer())))); }catch(e){}
@@ -1262,7 +1271,7 @@ function talkBodyHTML(e){
   if(s.changed) h+='<div class="rnote">Muse changed this entry after you routed it. Route it again, or mark it reviewed.</div>';
   if(r.card) h+=`<div class="rnote">→ canon card: <span class="go" data-id="${attr(r.card)}">${esc(CH[r.card]?CH[r.card].title:r.card)}</span>${CH[r.card]?'':' (the site is still building it, about a minute)'}</div>`;
   if(r.note) h+=`<div class="rnote">Your note to Claude${r.note_at?' ('+esc(r.note_at.slice(0,10))+')':''}: ${esc(r.note)}<br>${r.receipt?'<b>Processed</b> → '+esc(r.receipt):'<b>Waiting for Claude</b>, picked up at the next check'}</div>`;
-  if(!TOKEN) return h+`<div class="rnote">${PW?'To route this entry, turn editing on (⚙ in the header).':'Routing works on the live site, with editing on.'}</div>`;
+  if(!TOKEN) return h+`<div class="rnote">${(PW||PLAIN)?'To route this entry, turn editing on (⚙ in the header).':'Routing works on the live site, with editing on.'}</div>`;
   h+='<div class="route">';
   h+='<button class="primary" data-act="card" title="Opens the new-card box filled with this entry. The card lands in the Unshelved tray, red and marked MUSE unless you rewrite it.">→ make a canon card</button>';
   h+=`<button data-act="note" title="Tell Claude where this belongs or what to do with it. Claude answers with a receipt here.">✎ ${r.note&&!r.receipt?'change the note':'note for Claude'}</button>`;
@@ -1476,6 +1485,12 @@ async function tryUnlock(pw){
 let inline=null;
 try{ inline=JSON.parse(document.getElementById('data').textContent); }catch(e){}
 if(inline){ boot(inline); }
+else if(PLAIN){ // library.rainbowagama.com: Cloudflare Access is the door, so there is no lock screen
+  (async()=>{ try{ const res=await fetch('data.json',{cache:'no-store'}); if(!res.ok) throw new Error('data.json '+res.status);
+      boot(await res.json()); await loadToken();
+      if(TOKEN && view==='drafts' && !(query.trim().length>1)) render(); }
+    catch(err){ toast('The site could not load its data ('+err.message+'). Reload in a minute.',60000); } })();
+}
 else{
   const lock=document.getElementById('lock'); lock.style.display='flex';
   const go=async()=>{ try{ await tryUnlock(document.getElementById('pw').value); }
