@@ -69,6 +69,9 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
 .talkbar .gap{width:10px}
 .talkbar a{color:var(--dim);font-size:.75rem;font-family:'Courier New',monospace}
 .badge.vo{color:#7a2a22;border-color:#d9a79f;background:#f8e4df}
+.badge.new{color:#241d12;border-color:var(--accent);background:var(--accent)}
+#seen-all{font-size:.7rem;color:var(--dim);margin-left:4px}
+.vq{font-size:.78rem;color:var(--dim);border-left:2px solid var(--accent);padding:4px 8px;margin:0 0 10px}
 .badge.wait{color:#8a5a12;border-color:#c9a25a;background:#f7e6bd}
 .talk .route{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 2px;padding-top:10px;border-top:1px dashed #d9a79f}
 .talk .route button{background:none;border:1px solid #b9a87f;color:#6b5d42;padding:3px 12px;font-size:.72rem;cursor:pointer;
@@ -901,7 +904,15 @@ function save(){ localStorage.setItem('library-canon-books', JSON.stringify(book
 function shelved(){ const s=new Set(); books.forEach(b=>b.chapters.forEach(c=>s.add(c))); return s; }
 function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 
-function renderBody(id){ return renderText(CH[id].body); }
+// voice notes: when and from which recording the card was filed, and any routing doubt Claude left for Clay
+function voiceNote(c){ if(!c.filed&&!c.verify&&!c.note) return '';
+  let h=`<div class="vq">${c.filed?`Voice note, filed ${esc(c.filed)}${c.source?' · '+esc(c.source):''}. Clay's words verbatim; the title is Claude's placeholder.`:''}`;
+  if(c.verify) h+=`<br><b>Routing doubt:</b> ${esc(c.verify)}`;
+  if(c.note) h+=`<br><b>Note:</b> ${esc(c.note)}`;
+  return h+'</div>'; }
+// "new" = a voice-note card filed after Clay last clicked "mark seen" in the Unshelved tray (kept in this browser)
+function isNewVoice(c){ return !!c.filed && c.filed>lsGet('library-canon-voice-seen',''); }
+function renderBody(id){ return voiceNote(CH[id])+renderText(CH[id].body); }
 // mark: optional {cls, has(normalisedParagraph)} used by the working-draft compare view
 function renderText(text, mark){
   return text.split(/\n\s*\n/).map(p=>{
@@ -935,7 +946,7 @@ function cardHTML(id, draggable){
   const cl=!!NOTCLAY[c.author];
   return `<div class="card${cl?' claude':''}" data-id="${id}" ${draggable?'draggable="true"':''} style="border-left-color:${cl?'#b3261e':col}">
     <div class="head">${draggable?'<span class="grip">⠿</span>':''}
-      <span class="ttl">${esc(c.title)}${ph}</span>${authorBadge(c)}
+      <span class="ttl">${esc(c.title)}${ph}</span>${authorBadge(c)}${isNewVoice(c)?'<span class="badge new" title="A voice note filed since you last clicked “mark seen”">new</span>':''}${c.verify?'<span class="badge wait" title="Claude was unsure where this belongs; the question is inside the card">?</span>':''}
       <span class="meta">${esc(c.storyline)} · ${c.words}w · ${esc(c.maturity)}${chars?' · '+esc(chars):''}</span>
       <span class="star${st?' on':''}" data-id="${id}" title="${st?'In the current draft — click to remove':'Mark ready: add to the current draft'}">${st?'★':'☆'}</span></div>
     <div class="body" data-lazy="1"></div></div>`;
@@ -974,17 +985,24 @@ function renderShelf(){
     b.chapters.forEach((cid,ci)=>{ html+=cardHTML(cid,true)+`<div class="dropzone" data-b="${bi}" data-i="${ci+1}"></div>`; });
     html+='</div></div>';
   });
-  html+='</div><div id="tray"><h3>UNSHELVED ('+(Object.keys(CH).length-sh.size)+')</h3><input id="trayq" placeholder="filter…" value="'+esc(trayQuery)+'"><div id="trayfilters">';
+  const fresh=Object.values(CH).filter(c=>!sh.has(c.id)&&isNewVoice(c)).length;
+  html+='</div><div id="tray"><h3>UNSHELVED ('+(Object.keys(CH).length-sh.size)+')'+(fresh?` · <span class="badge new">${fresh} new</span> <a id="seen-all" href="#" title="Voice notes filed up to today stop counting as new (this browser only)">mark seen</a>`:'')+'</h3><input id="trayq" placeholder="filter…" value="'+esc(trayQuery)+'"><div id="trayfilters">';
+  if(fresh) html+=`<span class="chip${trayFilter==='NEW'?' on':''}" data-sl="NEW" style="border-color:var(--accent)">new voice notes</span>`;
   SLORDER.forEach(sl=>{ html+=`<span class="chip${trayFilter===sl?' on':''}" data-sl="${sl}" style="border-color:${SLCOLOR[sl]}">${sl}</span>`; });
   html+='</div><div id="traycards">';
+  // order: voice notes filed since Clay last clicked "mark seen" (newest first), then cards written on the site, then the rest
+  const rank=c=>isNewVoice(c)?0:(c.id.startsWith('web-')?1:2);
   Object.values(CH).filter(c=>!sh.has(c.id))
-    .filter(c=>!trayFilter||c.storyline===trayFilter)
+    .filter(c=>!trayFilter||(trayFilter==='NEW'?isNewVoice(c):c.storyline===trayFilter))
     .filter(c=>!trayQuery||c.title.toLowerCase().includes(trayQuery.toLowerCase()))
-    .sort((a,b)=>{ const aw=a.id.startsWith('web-'), bw=b.id.startsWith('web-');
-      return aw===bw ? (aw ? b.id.localeCompare(a.id) : 0) : (aw?-1:1); })
+    .sort((a,b)=>{ const ra=rank(a), rb=rank(b); if(ra!==rb) return ra-rb;
+      if(ra===0) return (b.filed||'').localeCompare(a.filed||'')||b.id.localeCompare(a.id);
+      return ra===1 ? b.id.localeCompare(a.id) : 0; })
     .slice(0,140).forEach(c=>{ html+=cardHTML(c.id,true); });
   html+='</div></div></div>';
   m.innerHTML=html; bindCards(m);
+  const seenBtn=document.getElementById('seen-all');
+  if(seenBtn) seenBtn.addEventListener('click',e=>{ e.preventDefault(); lsSet('library-canon-voice-seen',new Date().toISOString().slice(0,10)); if(trayFilter==='NEW') trayFilter=null; renderShelf(); });
   if(!window._shelfOpened){ window._shelfOpened=1; const fb=m.querySelector('.book'); if(fb){ fb.classList.add('open');
     const fc=fb.querySelector('.card .head'); if(fc) fc.click(); } }
   m.querySelectorAll('.bhead').forEach(h=>h.addEventListener('click',()=>h.parentElement.classList.toggle('open')));
