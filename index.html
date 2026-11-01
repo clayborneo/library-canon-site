@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Library — Canon</title>
+<link rel="stylesheet" href="fonts/fonts.css">
 <style>
 :root{
   --ground:#231a12; --panel:#2e2318; --card:#f5eeDD; --card2:#efe6cf;
@@ -198,6 +199,81 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
 .passage p.hd{font-weight:bold;margin:1.2em 0 .4em}
 .passage .cue{margin:.95em 0}
 @media(max-width:900px){#shelfwrap{grid-template-columns:1fr}#tray{position:static;max-height:none}}
+/* Design tab: each book as an object */
+.dshelf{display:flex;align-items:flex-end;gap:3px;padding:14px 12px 0;background:#1c1510;border:1px solid var(--line);border-radius:4px;overflow-x:auto;min-height:120px}
+.dshelf .board{height:7px;background:#4a3524;flex:none;width:100%;margin-top:0}
+.dspine{flex:none;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid rgba(0,0,0,.35);
+  border-radius:1px;box-shadow:inset 1px 0 rgba(255,255,255,.12),1px 1px 2px rgba(0,0,0,.5);writing-mode:vertical-rl;transform:rotate(180deg);
+  font-size:.58rem;letter-spacing:.08em;padding:6px 0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dspine.blank{background:#2a2119;color:#7a6a50;border:1px dashed #5a4a36;box-shadow:none}
+.dspine.on{outline:2px solid var(--accent);outline-offset:1px}
+.dspine.lib{writing-mode:horizontal-tb;transform:none;background:none;border:none;box-shadow:none;color:var(--dim);padding:0 6px 0 0;font-size:.65rem}
+.dspine.lib svg{width:30px;height:30px;display:block;margin:0 auto 3px}
+.dbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}
+.dbar select{background:#1c1510;border:1px solid var(--line);color:var(--cream);padding:5px 8px;border-radius:3px;font-family:inherit;font-size:.85rem;max-width:100%}
+.dvers{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.dvers .chip.ap{border-color:#8fc29b;color:#8fc29b}
+.dvers .chip.ap.on{background:#8fc29b;color:#1c1510}
+.dgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,380px);gap:18px;align-items:start}
+@media(max-width:900px){.dgrid{grid-template-columns:1fr}}
+.dpanel{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:12px 14px;margin:0 0 14px}
+.dpanel h4{margin:0 0 8px;font-weight:normal;letter-spacing:.12em;font-size:.72rem;color:var(--accent);font-family:'Courier New',monospace}
+.dpanel .sub{color:var(--dim);font-size:.72rem;font-family:'Courier New',monospace;margin:0 0 8px}
+.dscroll{overflow-x:auto;padding:14px 6px 10px}
+.dcover{display:flex;align-items:flex-start;width:max-content;filter:drop-shadow(2px 4px 6px rgba(0,0,0,.55))}
+.dcover .face{position:relative;overflow:hidden;flex:none;box-sizing:border-box}
+.dcover .face.front{display:flex;flex-direction:column;align-items:center;text-align:center}
+.dcover .face.front .ttl{position:absolute;left:8%;right:8%;line-height:1.05;word-wrap:break-word}
+.dcover .face.front .num{position:absolute;left:0;right:0;font-family:Jost,sans-serif;letter-spacing:.2em;font-size:.6rem}
+.dcover .face.front .auth{position:absolute;left:0;right:0;font-size:.7rem;letter-spacing:.1em}
+.dcover .face.front .illus{position:absolute;left:10%;right:10%;display:flex;align-items:center;justify-content:center;text-align:center;font-style:italic;font-size:.62rem;line-height:1.3;padding:6px}
+.dcover .face.front .illus.brief{border:1px dashed currentColor;opacity:.75}
+.dcover .face.front .illus img{max-width:100%;max-height:100%}
+.dcover .face.spine{display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;transform:rotate(180deg);font-size:.55rem;letter-spacing:.14em;white-space:nowrap}
+.dcover .face.back{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:9%}
+.dcover .face.back .mk{width:16%;}
+.dcover .face.back .mk svg,.dcover .face.back .mk img{width:100%;display:block}
+.dcover .face.back .bt{font-size:.6rem;line-height:1.4;padding:0 12%;text-align:center;margin-bottom:auto;margin-top:12%}
+.dspread{display:flex;width:max-content;filter:drop-shadow(2px 4px 6px rgba(0,0,0,.55))}
+.dpage{position:relative;overflow:hidden;flex:none;box-sizing:border-box;text-align:justify;hyphens:auto;-webkit-hyphens:auto}
+.dpage.verso{border-right:1px solid rgba(0,0,0,.18)}
+.dpage .rh{position:absolute;top:0;left:0;right:0;font-variant:small-caps;letter-spacing:.08em;opacity:.7;text-align:center}
+.dpage .fo{position:absolute;bottom:0;left:0;right:0;opacity:.7;text-align:center}
+.dpage .ch{text-align:center;line-height:1.1}
+.dpage .orn{text-align:center;opacity:.8}
+.dpage p{margin:0;text-indent:1.4em}
+.dpage p.first{text-indent:0}
+.dpage p.first::first-line{font-variant:small-caps;letter-spacing:.04em}
+.dswatch{display:flex;flex-wrap:wrap;gap:8px}
+.dswatch .sw{width:92px;background:var(--card);color:var(--ink);border-radius:3px;overflow:hidden;font-size:.62rem;font-family:'Courier New',monospace}
+.dswatch .sw .c{height:46px}
+.dswatch .sw div:not(.c){padding:4px 6px;line-height:1.3}
+.dtype .spec{background:var(--card);color:var(--ink);border-radius:3px;padding:12px 14px;margin:0 0 8px}
+.dtype .spec .lab{font-family:'Courier New',monospace;font-size:.62rem;color:#6b5d42;margin:0 0 4px}
+.dmat{font-size:.82rem;line-height:1.5;margin:0}
+.dmat dt{color:var(--dim);font-family:'Courier New',monospace;font-size:.68rem;margin-top:6px}
+.dmat dd{margin:0}
+.dill{background:var(--card);color:var(--ink);border-radius:3px;padding:8px 11px;margin:0 0 6px;font-size:.82rem;line-height:1.45;border-left:5px solid #888}
+.dill .pl{font-family:'Courier New',monospace;font-size:.65rem;color:#6b5d42}
+.dill img{max-width:100%;display:block;margin:6px 0 0;background:#fff}
+.dpat{height:70px;border-radius:3px;border:1px solid var(--line)}
+.dnote{background:#fbf1ee;color:#b3261e;border-left:5px solid #b3261e;border-radius:3px;padding:10px 12px;font-size:.85rem;line-height:1.5;margin:0 0 10px}
+.dnote .who{font-family:'Courier New',monospace;font-size:.62rem;letter-spacing:.1em;margin:0 0 4px}
+.dnote p{margin:.4em 0}
+.dnote ol{margin:.4em 0;padding-left:1.4em}
+.dreq{background:var(--card);color:var(--ink);border-left:5px solid #888;border-radius:3px;padding:9px 12px;margin:0 0 8px;font-size:.85rem;line-height:1.5}
+.dreq .m{font-family:'Courier New',monospace;font-size:.64rem;color:#6b5d42;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 4px}
+.dreq .rc{color:#b3261e;border-top:1px solid #e3cfc9;margin-top:6px;padding-top:6px;font-size:.8rem}
+.dreq .rc .go{cursor:pointer;text-decoration:underline dotted}
+.dreq button,.dask button,.dvers button{background:none;border:1px solid var(--line);color:var(--dim);padding:3px 10px;font-size:.72rem;cursor:pointer;border-radius:3px;font-family:inherit}
+.dreq button{border-color:#cbbf9e;color:#6b5d42}
+.dask textarea{width:100%;min-height:96px;background:#fffdf4;color:var(--ink);border:1px solid #cbbf9e;border-radius:3px;padding:8px 10px;font-family:inherit;font-size:.9rem;line-height:1.45;resize:vertical}
+.dask .row{display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap}
+.dask button.primary{background:var(--accent);color:#241d12;border-color:var(--accent)}
+.dprin{margin:0;padding-left:1.2em;font-size:.88rem;line-height:1.55}
+.dprin li{margin:.35em 0}
+.dmark{width:120px;height:120px;color:var(--cream);margin:4px auto 8px}
+.dmark img{width:100%;height:100%;display:block}
 </style>
 </head>
 <body>
@@ -217,6 +293,7 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
     <button data-v="drafts">Drafts</button>
     <button data-v="timeline">Timeline</button>
     <button data-v="talks">Conversations</button>
+    <button data-v="design">Design</button>
   </nav>
   <input id="q" placeholder="search everything…">
   <div class="tools">
@@ -310,8 +387,11 @@ async function loadToken(){
   }
   refreshEditUI();
 }
+let lastTok=null;
 function refreshEditUI(){
   if(PW||PLAIN) document.getElementById('settings').style.display='inline';
+  if(DATA && view==='design' && lastTok!==null && !!TOKEN!==lastTok) renderDesign(); // the ask box appears or goes with the token
+  lastTok=!!TOKEN;
   document.getElementById('settings').textContent = TOKEN?'⚙ editing on':'⚙';
   document.getElementById('savegh').style.display =
     (TOKEN && document.getElementById('dirty').style.display!=='none')?'inline':'none';
@@ -1354,6 +1434,214 @@ function bindTalk(card,e){
   }));
 }
 
+/* ---------- Design tab: each book as a physical object, versioned, with Clay's requests to Claude ----------
+   Data: structure/design.json (scripts/design.py). A record per book (books.json id) plus "library" for the
+   shared system. Clay writes a request here (one commit); Claude answers with a new numbered version of the
+   spec; the site rebuilds and draws it: the cover flat (back, spine, front), an interior spread set in the
+   chosen faces at the chosen size with the book's own opening words, the palette, materials, pattern and the
+   picture list. Claude's notes are red, like everywhere else on the site. ---------- */
+const DESIGN_PATH='structure/design.json';
+let DES=null, desKey='library', desVer=null;
+const DES_BLANK=()=>({versions:[],requests:[],approved:null});
+function initDesign(){
+  DES=JSON.parse(JSON.stringify(DATA.design||{version:1,updated:null,library:DES_BLANK(),books:{}}));
+  DES.library=DES.library||DES_BLANK(); DES.books=DES.books||{};
+  const b=lsGet('library-canon-design-saved',null); // a save made minutes ago shows until the build carries it
+  if(b&&b.updated&&(!DES.updated||DES.updated<b.updated)){ b.fonts=DES.fonts; DES=b; } else lsSet('library-canon-design-saved',null);
+}
+function desRec(key){ return key==='library'?DES.library:(DES.books[key]||DES_BLANK()); }
+function desBook(key){ return key==='library'?null:books.find(b=>b.id===key); }
+function desTitle(key){ const b=desBook(key); return b?b.title:'The Library'; }
+function desLatest(key){ const v=desRec(key).versions; return v.length?v[v.length-1]:null; }
+function desShown(key){ const r=desRec(key), v=r.versions; if(!v.length) return null;
+  return v.find(x=>x.v===desVer)||v.find(x=>x.v===r.approved)||v[v.length-1]; }
+function desSeen(){ return lsGet('library-canon-design-seen',{}); }
+function desUnseen(){ const seen=desSeen(); return ['library',...books.map(b=>b.id)].filter(k=>{ const l=desLatest(k); return l&&(seen[k]||0)<l.v; }); }
+function designTabCount(){ const b=document.querySelector('nav button[data-v="design"]'); if(!b||!DES) return;
+  const n=desUnseen().length; b.textContent='Design'+(n?' · '+n:''); b.title=n?n+' design version(s) you have not opened yet':''; }
+function svgSafe(s){ s=String(s||'').trim(); if(!/^<svg[\s>]/i.test(s)) return '';
+  return s.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<(foreignObject|iframe|object|embed)[\s\S]*?>/gi,'')
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi,'').replace(/(href|src)\s*=\s*["']?\s*javascript:[^"'\s>]*/gi,''); }
+function desColors(spec){ const cs=spec.colors||[], find=re=>{ const c=cs.find(c=>re.test(c.role||'')); return c&&c.hex; };
+  const ground=find(/cover ground|ground/)||(cs[0]&&cs[0].hex)||'#555', ink=find(/text ink|ink/)||'#1f1b16';
+  return {ground, ink, type:find(/cover type|paper/)||'#f3ecd8', accent:find(/accent/)||'#c9962b', paper:find(/paper/)||'#f5efe0'}; }
+// pattern tiles as data URIs (CSP allows data: images); ink and ground come from the spec
+function desPatternURI(p){ if(!p||!p.kind||p.kind==='none') return '';
+  const ink=p.ink||'#000', g=p.ground||'none', k=p.kind, sw=1.1;
+  const body={
+    leaves:`<path d="M6 18c0-7 4-12 12-13-1 8-5 12-12 13zM18 30c0-7 4-12 12-13-1 8-5 12-12 13z" fill="${ink}" opacity=".85"/><path d="M14 10c4-1 6 2 7 5M26 22c4-1 6 2 7 5" stroke="${ink}" stroke-width="${sw}" fill="none"/>`,
+    stripes:`<path d="M0 6h24M0 18h24" stroke="${ink}" stroke-width="3"/>`,
+    dots:`<circle cx="6" cy="6" r="2" fill="${ink}"/><circle cx="18" cy="18" r="2" fill="${ink}"/>`,
+    crosshatch:`<path d="M0 0l24 24M24 0L0 24" stroke="${ink}" stroke-width="${sw}"/>`,
+    waves:`<path d="M0 8c6-6 12 6 18 0s6-6 12 0M0 20c6-6 12 6 18 0s6-6 12 0" stroke="${ink}" stroke-width="${sw}" fill="none"/>`,
+    diamonds:`<path d="M12 2l10 10-10 10L2 12z" fill="none" stroke="${ink}" stroke-width="${sw}"/>`,
+    scales:`<path d="M0 12a12 12 0 0124 0M-12 24a12 12 0 0124 0M12 24a12 12 0 0124 0" fill="none" stroke="${ink}" stroke-width="${sw}"/>`,
+    stars:`<path d="M12 3l1.8 5.4H20l-4.6 3.3 1.8 5.4L12 13.8 6.8 17.1l1.8-5.4L4 8.4h6.2z" fill="${ink}"/>`,
+    grid:`<path d="M0 .5h24M.5 0v24" stroke="${ink}" stroke-width="${sw}"/>`,
+    chevrons:`<path d="M0 10l12-8 12 8M0 22l12-8 12 8" fill="none" stroke="${ink}" stroke-width="${sw}"/>`
+  }[k]; if(!body) return '';
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><rect width="24" height="24" fill="${g}"/>${body}</svg>`;
+  return `url(data:image/svg+xml,${encodeURIComponent(svg)})`; } // no quotes: it goes inside style="…"
+function desPatternStyle(p,where){ if(!p||!(p.where||'').includes(where)) return '';
+  const u=desPatternURI(p); return u?`background-image:${u};background-size:${Math.round(24*(p.scale||1))}px;`:''; }
+function desFontStack(t){ return t&&(t.stack||(t.family?`'${t.family}', serif`:''))||'inherit'; }
+function desCase(t,s){ return t&&t.case==='upper'?s.toUpperCase():t&&t.case==='lower'?s.toLowerCase():s; }
+function desOpening(key,words){ // the book's own first words, Clay's, for the interior spread
+  const b=desBook(key); const ids=b?b.chapters:(books[0]?books[0].chapters:[]); let out=[];
+  for(const id of ids){ const c=CH[id]; if(!c||c.author) continue;
+    const paras=c.body.split(/\n\s*\n/).map(p=>p.trim()).filter(p=>p&&!/^⟦/.test(p)&&!/^\*{3,}$/.test(p)&&!/^#/.test(p)&&!DIRECTION.test(p));
+    for(const p of paras){ out.push(p); if(out.join(' ').split(/\s+/).length>words) return {title:c.title,paras:out}; }
+    if(out.length) return {title:c.title,paras:out}; }
+  return {title:b?b.title:'',paras:['(no chapters shelved in this book yet)']}; }
+// ---- the drawings ----
+function desCoverHTML(key,spec){
+  const S=40, f=spec.format||{}, w=(+f.width_in||5.5)*S, h=(+f.height_in||8.5)*S, sp=Math.max(6,(+f.spine_in||0.2)*S);
+  const col=desColors(spec), cv=spec.cover||{}, t=spec.type||{}, disp=t.display||{};
+  const title=cv.title||desTitle(key), face=`background:${col.ground};color:${col.type};${desPatternStyle(spec.pattern,'cover')}`;
+  const ill=(spec.illustrations||[]).find(i=>i.id===cv.illustration||i.placement==='cover');
+  const dsz=Math.max(10,(+disp.size_pt||30)*S/72);
+  const layout=cv.layout||'centered', ttlTop=layout==='lower'?'58%':layout==='upper'?'10%':'22%';
+  let illus='';
+  if(ill){ const svg=svgSafe(ill.svg); const top=layout==='lower'?'12%':'46%';
+    illus=`<div class="illus${svg?'':' brief'}" style="top:${top};height:36%;${svg?'':`color:${col.accent}`}">${svg?`<img alt="" src="data:image/svg+xml,${encodeURIComponent(svg)}">`:esc(ill.subject||'picture')}</div>`; }
+  const lib=desLatest('library'), mark=lib&&lib.spec.mark&&svgSafe(lib.spec.mark.svg);
+  return `<div class="dscroll"><div class="dcover">
+    <div class="face back" style="width:${w}px;height:${h}px;${face}">${cv.back_text?`<div class="bt" style="font-family:${desFontStack(t.text)}">${esc(cv.back_text)}</div>`:''}<div class="mk">${mark||''}</div></div>
+    <div class="face spine" style="width:${sp}px;height:${h}px;${face};font-family:${desFontStack(disp)};border-left:1px solid rgba(0,0,0,.25);border-right:1px solid rgba(0,0,0,.25)">${esc(cv.spine_text||title)}</div>
+    <div class="face front" style="width:${w}px;height:${h}px;${face}">
+      <div class="num" style="top:7%;color:${col.accent}">${esc(cv.number||'')}</div>
+      <div class="ttl" style="top:${ttlTop};font-family:${desFontStack(disp)};font-weight:${disp.weight||600};font-size:${dsz}px;letter-spacing:${disp.tracking||0}em">${esc(desCase(disp,title))}</div>
+      ${cv.subtitle?`<div class="auth" style="top:calc(${ttlTop} + ${dsz*1.6}px);font-family:${desFontStack(t.text)};font-style:italic">${esc(cv.subtitle)}</div>`:''}
+      ${illus}
+      ${cv.author_line?`<div class="auth" style="bottom:8%;font-family:${desFontStack(disp)}">${esc(cv.author_line)}</div>`:''}
+    </div></div></div>
+    <div class="sub">${esc(String(f.width_in||'?'))} × ${esc(String(f.height_in||'?'))} in · spine ${esc(String(f.spine_in||'?'))} in · ${esc(String(f.pages||'?'))} pages · ${esc(f.binding||'')} · drawn at ${S} px per inch</div>`;
+}
+function desSpreadHTML(key,spec){
+  const S=48, f=spec.format||{}, w=(+f.width_in||5.5)*S, h=(+f.height_in||8.5)*S, t=spec.type||{}, m=t.margins_in||{};
+  const col=desColors(spec), txt=t.text||{}, disp=t.display||{};
+  const fs=Math.max(6,(+txt.size_pt||10.5)*S/72), lh=Math.max(fs,(+txt.leading_pt||fs*1.35*72/S)*S/72);
+  const pad=side=>`${(+m.top||0.7)*S}px ${(side==='verso'?(+m.inside||0.65):(+m.outside||0.6))*S}px ${(+m.bottom||0.85)*S}px ${(side==='verso'?(+m.outside||0.6):(+m.inside||0.65))*S}px`;
+  const open=desOpening(key,900), rh=`font-size:${fs*.78}px;top:${(+m.top||0.7)*S*.45}px`, fo=`font-size:${fs*.85}px;bottom:${(+m.bottom||0.85)*S*.4}px`;
+  const page=(side,inner,folio)=>`<div class="dpage ${side}" style="width:${w}px;height:${h}px;background:${col.paper};color:${col.ink};padding:${pad(side)};font-family:${desFontStack(txt)};font-weight:${txt.weight||400};font-size:${fs}px;line-height:${lh}px">
+    ${folio?`<div class="rh" style="${rh}">${esc(side==='verso'?desTitle(key):open.title)}</div>`:''}${inner}${folio?`<div class="fo" style="${fo}">${folio}</div>`:''}</div>`;
+  const paras=open.paras.map((p,i)=>`<p class="${i?'':'first'}">${emph(esc(p))}</p>`);
+  const chapterHead=`<div style="height:${h*.28}px"></div><div class="ch" style="font-family:${desFontStack(disp)};font-weight:${disp.weight||600};font-size:${Math.max(12,(+disp.size_pt||30)*S/72*.62)}px;letter-spacing:${disp.tracking||0}em">${esc(desCase(disp,open.title))}</div><div class="orn" style="margin:${lh*.6}px 0 ${lh}px;color:${col.accent}">❦</div>`;
+  const split=Math.max(1,Math.ceil(paras.length*.42));
+  return `<div class="dscroll"><div class="dspread">${page('verso',chapterHead+paras.slice(0,split).join(''),'')}${page('recto',paras.slice(split).join(''),'2')}</div></div>
+    <div class="sub">${esc(txt.family||'text face')} ${esc(String(txt.size_pt||''))}/${esc(String(txt.leading_pt||''))} pt · margins top ${esc(String(m.top||'?'))} · inside ${esc(String(m.inside||'?'))} · outside ${esc(String(m.outside||'?'))} · bottom ${esc(String(m.bottom||'?'))} in · opening words from “${esc(open.title)}” (yours) · drawn at ${S} px per inch</div>`;
+}
+function desTypeHTML(key,spec){
+  const t=spec.type||{}, d=t.display||{}, x=t.text||{}, title=(spec.cover||{}).title||desTitle(key), open=desOpening(key,60);
+  const px=pt=>Math.max(8,(+pt||10)*96/72), known=DES.fonts||{}, note=f=>f&&f.family&&!known[f.family]?` · <i>not on the shelf of faces: shown with the nearest installed font</i>`:'';
+  return `<div class="dtype">
+    <div class="spec"><div class="lab">display · ${esc(d.family||'?')} ${esc(String(d.weight||''))} · ${esc(String(d.size_pt||'?'))} pt${note(d)}</div>
+      <div style="font-family:${desFontStack(d)};font-weight:${d.weight||600};font-size:${px(d.size_pt)}px;letter-spacing:${d.tracking||0}em;line-height:1.05">${esc(desCase(d,title))}</div></div>
+    <div class="spec"><div class="lab">text · ${esc(x.family||'?')} ${esc(String(x.weight||''))} · ${esc(String(x.size_pt||'?'))}/${esc(String(x.leading_pt||'?'))} pt, shown at print size${note(x)}</div>
+      <div style="font-family:${desFontStack(x)};font-weight:${x.weight||400};font-size:${px(x.size_pt)}px;line-height:${px(x.leading_pt||(+x.size_pt||10)*1.35)}px">${esc(open.paras.join(' ').split(/\s+/).slice(0,60).join(' '))}</div></div>
+    ${t.running_head?`<div class="sub">running head: ${esc(t.running_head)}</div>`:''}${t.chapter_opening?`<div class="sub">chapter opening: ${esc(t.chapter_opening)}</div>`:''}
+  </div>`;
+}
+function desPaletteHTML(spec){ const cs=spec.colors||[]; if(!cs.length) return '<div class="sub">no colours chosen yet</div>';
+  return '<div class="dswatch">'+cs.map(c=>`<div class="sw"><div class="c" style="background:${/^#[0-9a-f]{6}$/i.test(c.hex)?c.hex:'#888'}"></div><div><b>${esc(c.name||'')}</b><br>${esc(c.hex||'')}<br>${esc(c.role||'')}</div></div>`).join('')+'</div>'; }
+function desMaterialsHTML(spec){ const m=spec.materials||{}; const ks=Object.keys(m); if(!ks.length) return '<div class="sub">no materials chosen yet</div>';
+  return '<dl class="dmat">'+ks.map(k=>`<dt>${esc(k.replace(/_/g,' '))}</dt><dd>${esc(String(m[k]))}</dd>`).join('')+'</dl>'; }
+function desPatternHTML(spec){ const p=spec.pattern; if(!p||!p.kind||p.kind==='none') return '<div class="sub">no pattern</div>';
+  const u=desPatternURI(p); return `<div class="dpat" style="background:${p.ground||'#fff'};${u?`background-image:${u};background-size:${Math.round(24*(p.scale||1))}px`:''}"></div><div class="sub">${esc(p.kind)} · ${esc(p.where||'')}${p.note?' · '+esc(p.note):''}</div>`; }
+function desIllusHTML(spec){ const il=spec.illustrations||[]; if(!il.length) return '<div class="sub">no pictures planned yet</div>';
+  const st={brief:'badge wait',sketch:'badge ed',final:'badge own'};
+  return il.map(i=>{ const svg=svgSafe(i.svg); return `<div class="dill"><span class="pl">${esc(i.id||'')} · ${esc(i.placement||'')}</span> <span class="${st[i.status]||'badge'}">${esc(i.status||'')}</span><br>${esc(i.subject||'')}${i.medium?`<br><span class="pl">${esc(i.medium)}</span>`:''}${svg?`<img alt="" src="data:image/svg+xml,${encodeURIComponent(svg)}">`:''}</div>`; }).join(''); }
+function desNoteHTML(v){ if(!v||!(v.note||v.spec.notes)) return '';
+  const para=s=>esc(s).split(/\n\s*\n/).map(p=>`<p>${p}</p>`).join('');
+  return `<div class="dnote"><div class="who">CLAUDE · v${v.v} · ${esc((v.at||'').slice(0,10))}</div>${v.note?para(v.note):''}${v.spec.notes?para(v.spec.notes):''}</div>`; }
+function desShelfHTML(){
+  const S=11, lib=desLatest('library'), mark=lib&&lib.spec.mark&&svgSafe(lib.spec.mark.svg);
+  let h=`<div class="dshelf"><div class="dspine lib${desKey==='library'?' on':''}" data-k="library" title="The Library: the shared system">${mark||''}the Library</div>`;
+  books.forEach((b,i)=>{ const v=desShown(b.id)||desLatest(b.id); const f=v?(v.spec.format||{}):{};
+    const w=Math.max(14,(+f.spine_in||0.2)*S*5), ht=(+f.height_in||8.5)*S;
+    if(v){ const c=desColors(v.spec), d=(v.spec.type||{}).display||{};
+      h+=`<div class="dspine${desKey===b.id?' on':''}" data-k="${attr(b.id)}" title="${attr(b.title)} · v${v.v}" style="width:${w}px;height:${ht}px;background:${c.ground};color:${c.type};font-family:${desFontStack(d)}">${esc((v.spec.cover||{}).spine_text||b.title)}</div>`; }
+    else h+=`<div class="dspine blank${desKey===b.id?' on':''}" data-k="${attr(b.id)}" title="${attr(b.title)} · no design yet" style="width:${w}px;height:${ht}px">${i+1} · ${esc(b.title)}</div>`; });
+  return h+'</div><div class="sub" style="margin-top:4px">Every book at its own size, drawn to one scale. Dashed spines have no design yet: pick one and ask.</div>';
+}
+function desRequestsHTML(key){
+  const r=desRec(key), rq=[...r.requests].sort((a,b)=>(b.at||'').localeCompare(a.at||''));
+  let h=`<div class="dask">${TOKEN?`<textarea id="d-ask" placeholder="What should this book look like, or what should change? Dimensions, materials, colours, patterns, fonts, pictures, anything. Claude answers with a new version here."></textarea>
+    <div class="row"><button class="primary" id="d-send">Send to Claude</button><span class="sub" style="margin:0">One commit; Claude picks it up at the next check and the answer shows up as a new version on this page.</span></div>`
+    :`<div class="sub">To ask for a design, save the GitHub token in ⚙ first.</div>`}</div>`;
+  if(rq.length) h+='<h4 style="margin-top:14px">REQUESTS</h4>';
+  rq.forEach(q=>{ const wait=!q.receipt;
+    h+=`<div class="dreq" data-id="${attr(q.id)}"><div class="m">${esc((q.at||'').slice(0,16).replace('T',' '))}${q.seen?` · about v${esc(String(q.seen))}`:''} ${wait?'<span class="badge wait">waiting for Claude</span>':q.version?`<span class="badge own">answered in v${esc(String(q.version))}</span>`:'<span class="badge own">answered</span>'}${wait&&TOKEN?'<button data-act="edit">change</button><button data-act="drop">withdraw</button>':''}</div>${esc(q.text).replace(/\n/g,'<br>')}
+      ${q.receipt?`<div class="rc"><span class="who" style="font-family:'Courier New',monospace;font-size:.62rem;letter-spacing:.1em">CLAUDE · ${esc((q.receipt_at||'').slice(0,10))}</span><br>${esc(q.receipt)}${q.version?` <span class="go" data-v="${attr(String(q.version))}">open v${esc(String(q.version))}</span>`:''}</div>`:''}</div>`; });
+  return h;
+}
+function renderDesign(){
+  const m=document.getElementById('main');
+  if(!DES) initDesign();
+  const r=desRec(desKey), v=desShown(desKey), lat=desLatest(desKey);
+  if(lat){ const seen=desSeen(); if((seen[desKey]||0)<lat.v){ seen[desKey]=lat.v; lsSet('library-canon-design-seen',seen); designTabCount(); } }
+  let html=`<div class="legend">Each book as an object: its size, materials, colours, pattern, type and pictures, before any of it is made. Ask for a look or a change
+    in the box; Claude answers with a numbered version (its notes in red, like everywhere here) and you keep asking until one is right, then approve it.
+    Pick a book on the shelf or in the list. “The Library” is the system every book shares: the mark, the checkout card, the colophon.</div>`;
+  html+=desShelfHTML();
+  html+=`<div class="dbar"><select id="d-pick"><option value="library"${desKey==='library'?' selected':''}>The Library · the shared system</option>${books.map((b,i)=>`<option value="${attr(b.id)}"${desKey===b.id?' selected':''}>${i+1} · ${esc(b.title)}${desLatest(b.id)?' · v'+desLatest(b.id).v:''}${desRec(b.id).approved?' ✓':''}</option>`).join('')}</select>
+    <div class="dvers">${r.versions.map(x=>`<span class="chip${x.v===(v&&v.v)?' on':''}${x.v===r.approved?' ap':''}" data-v="${x.v}" title="${attr((x.at||'').slice(0,10))}">v${x.v}${x.v===r.approved?' ✓':''}</span>`).join('')}
+    ${v&&TOKEN?(r.approved===v.v?`<button id="d-approve" data-v="">approved · undo</button>`:`<button id="d-approve" data-v="${v.v}">approve v${v.v}</button>`):''}</div></div>`;
+  if(!v){ html+=`<div class="dpanel"><h4>${esc(desTitle(desKey)).toUpperCase()}</h4><div class="sub">No design yet.</div>${desRequestsHTML(desKey)}</div>`; }
+  else if(desKey==='library'){ const s=v.spec, mark=s.mark&&svgSafe(s.mark.svg);
+    html+=`<div class="dgrid"><div>
+      <div class="dpanel"><h4>THE LIBRARY · SHARED SYSTEM · v${v.v}${r.approved===v.v?' · APPROVED':''}</h4>${desNoteHTML(v)}
+        ${mark?`<div class="dmark">${mark}</div><div class="sub" style="text-align:center">the mark${s.mark.note?' · '+esc(s.mark.note):''}</div>`:''}
+        ${s.principles?`<ol class="dprin">${s.principles.map(p=>`<li>${esc(p)}</li>`).join('')}</ol>`:''}</div>
+      ${s.type?`<div class="dpanel"><h4>HOUSE TYPE</h4>${desTypeHTML('library',s)}</div>`:''}
+      ${s.materials?`<div class="dpanel"><h4>SHARED PARTS</h4>${desMaterialsHTML(s)}</div>`:''}
+      <div class="dpanel"><h4>SHELF OF FACES</h4><div class="sub">Typefaces the site can show for real (open licences, self-hosted). Ask for any other face and it gets added.</div>
+        ${Object.entries(DES.fonts||{}).map(([f,x])=>`<div class="spec" style="background:var(--card);color:var(--ink);border-radius:3px;padding:8px 12px;margin:0 0 6px"><div style="font-family:'${attr(f)}';font-size:1.3rem;line-height:1.2">${esc(f)} <span style="font-style:italic">— ${esc(desTitle('b01'))}, the garden is beautiful and lush</span></div><div class="sub" style="margin:2px 0 0">${esc(x.role||'')}</div></div>`).join('')}</div>
+    </div><div><div class="dpanel"><h4>ASK</h4>${desRequestsHTML('library')}</div></div></div>`; }
+  else { const s=v.spec;
+    html+=`<div class="dgrid"><div>
+      <div class="dpanel"><h4>${esc(desTitle(desKey)).toUpperCase()} · v${v.v} · ${esc((v.at||'').slice(0,10))}${r.approved===v.v?' · APPROVED':''}</h4>${desNoteHTML(v)}${desCoverHTML(desKey,s)}</div>
+      <div class="dpanel"><h4>INSIDE</h4>${desSpreadHTML(desKey,s)}</div>
+      <div class="dpanel"><h4>TYPE</h4>${desTypeHTML(desKey,s)}</div>
+      <div class="dpanel"><h4>PICTURES</h4>${desIllusHTML(s)}</div>
+    </div><div>
+      <div class="dpanel"><h4>ASK</h4>${desRequestsHTML(desKey)}</div>
+      <div class="dpanel"><h4>COLOURS</h4>${desPaletteHTML(s)}</div>
+      <div class="dpanel"><h4>PATTERN</h4>${desPatternHTML(s)}</div>
+      <div class="dpanel"><h4>MATERIALS</h4>${desMaterialsHTML(s)}</div>
+    </div></div>`; }
+  m.innerHTML=html;
+  m.querySelectorAll('.dspine').forEach(el=>el.addEventListener('click',()=>{ desKey=el.dataset.k; desVer=null; renderDesign(); }));
+  const pick=m.querySelector('#d-pick'); if(pick) pick.addEventListener('change',()=>{ desKey=pick.value; desVer=null; renderDesign(); });
+  m.querySelectorAll('.dvers .chip, .dreq .go').forEach(c=>c.addEventListener('click',()=>{ desVer=+c.dataset.v; renderDesign(); window.scrollTo({top:0}); }));
+  const ap=m.querySelector('#d-approve'); if(ap) ap.addEventListener('click',()=>busy(ap,async()=>{
+    const n=ap.dataset.v?+ap.dataset.v:null;
+    await saveDesign(n?`site design: ${desKey} v${n} approved`:`site design: ${desKey} approval withdrawn`,doc=>{ const rec=desRecIn(doc,desKey); rec.approved=n; rec.approved_at=n?new Date().toISOString():null; });
+    toast(n?'Approved. Claude will treat v'+n+' as the one to build on.':'Approval withdrawn.'); renderDesign(); }));
+  const send=m.querySelector('#d-send'); if(send) send.addEventListener('click',()=>busy(send,async()=>{
+    const text=m.querySelector('#d-ask').value.trim(); if(!text){ toast('Write what you want first.'); return; }
+    const id='dr-'+new Date().toISOString().replace(/[-:T]/g,'').slice(0,14), seen=v?v.v:null;
+    await saveDesign(`site design: request on ${desKey} (${id})`,doc=>{ desRecIn(doc,desKey).requests.push({id,at:new Date().toISOString(),text,seen,receipt:null,receipt_at:null,version:null}); });
+    toast('Sent. Claude picks it up at the next check and answers here with a new version.'); renderDesign(); }));
+  m.querySelectorAll('.dreq button').forEach(btn=>btn.addEventListener('click',()=>busy(btn,async()=>{
+    const id=btn.closest('.dreq').dataset.id, q=desRec(desKey).requests.find(x=>x.id===id); if(!q) return;
+    if(btn.dataset.act==='edit'){ const text=(prompt('Change the request:',q.text)||'').trim(); if(!text||text===q.text) return;
+      await saveDesign(`site design: request changed on ${desKey} (${id})`,doc=>{ const x=desRecIn(doc,desKey).requests.find(x=>x.id===id); if(!x||x.receipt) throw new Error('Claude already answered this one; ask again in a new request'); x.text=text; x.at=new Date().toISOString(); }); }
+    else { if(!confirm('Withdraw this request?')) return;
+      await saveDesign(`site design: request withdrawn on ${desKey} (${id})`,doc=>{ const rec=desRecIn(doc,desKey), x=rec.requests.find(x=>x.id===id); if(x&&x.receipt) throw new Error('Claude already answered this one'); rec.requests=rec.requests.filter(x=>x.id!==id); }); }
+    renderDesign(); })));
+}
+function desRecIn(doc,key){ if(key==='library'){ doc.library=doc.library||DES_BLANK(); return doc.library; } doc.books=doc.books||{}; doc.books[key]=doc.books[key]||DES_BLANK(); return doc.books[key]; }
+// One commit per action on structure/design.json, built on the repo copy as it is now (never on this page's stale view).
+async function saveDesign(message,mutate){
+  let cur=null; try{ cur=await readRepoFile(DESIGN_PATH); }catch(e){ if(!/^GitHub 404/.test(e.message)) throw e; }
+  const doc=cur?JSON.parse(cur.text):{version:1,updated:null,library:DES_BLANK(),books:{}};
+  mutate(doc); doc.updated=new Date().toISOString();
+  const text=JSON.stringify(doc,null,1)+'\n', payload={message,content:b64(encTxt(text))}; if(cur) payload.sha=cur.sha;
+  await gh(`/repos/${REPO}/contents/${DESIGN_PATH}`,{method:'PUT',body:JSON.stringify(payload)});
+  const fonts=DES&&DES.fonts; DES=doc; DES.fonts=fonts; lsSet('library-canon-design-saved',doc);
+}
+
 function renderSearch(){
   const m=document.getElementById('main'); const q=query.toLowerCase();
   const hits=Object.values(CH).filter(c=>c.title.toLowerCase().includes(q)||c.body.toLowerCase().includes(q)).slice(0,80);
@@ -1364,7 +1652,8 @@ function renderSearch(){
 
 function render(){
   if(!DATA) return;
-  talkTabCount();
+  talkTabCount(); designTabCount();
+  if(view==='design') return renderDesign(); // the search box does nothing here
   if(view==='talks') return renderTalks(); // the search box filters the entries while this tab is open
   if(query.trim().length>1){
     const fk=view==='drafts'&&activeFork&&getFork(activeFork);
@@ -1471,9 +1760,10 @@ function boot(data){
   if(dirtyForkIds.size) markDirty('forks',true);
   activeFork=localStorage.getItem('library-canon-active-fork');
   if(!getFork(activeFork)) activeFork=null;
-  initTalks();
+  initTalks(); initDesign();
   const h=location.hash.replace('#','');
-  if(['storylines','characters','drafts','timeline','talks','conversations'].includes(h)){ view=h==='conversations'?'talks':h;
+  if(h&&h.startsWith('design=')){ view='design'; desKey=decodeURIComponent(h.slice(7)); document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x.dataset.v==='design')); }
+  if(['storylines','characters','drafts','timeline','talks','conversations','design'].includes(h)){ view=h==='conversations'?'talks':h;
     document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x.dataset.v===view)); }
   if(h&&h.startsWith('char=')){ view='characters'; window._char=decodeURIComponent(h.slice(5));
     document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x.dataset.v==='characters')); }
@@ -1498,7 +1788,7 @@ async function tryUnlock(pw){
   PW=pw;
   boot(JSON.parse(decTxt(plain)));
   await loadToken();
-  if(TOKEN && view==='drafts' && !(query.trim().length>1)) render(); // the drafts header carries token-only buttons
+  if(TOKEN && (view==='design' || (view==='drafts' && !(query.trim().length>1)))) render(); /* these tabs carry token-only controls */ // the drafts header carries token-only buttons
 }
 let inline=null;
 try{ inline=JSON.parse(document.getElementById('data').textContent); }catch(e){}
@@ -1506,7 +1796,7 @@ if(inline){ boot(inline); }
 else if(PLAIN){ // library.rainbowagama.com: Cloudflare Access is the door, so there is no lock screen
   (async()=>{ try{ const res=await fetch('data.json',{cache:'no-store'}); if(!res.ok) throw new Error('data.json '+res.status);
       boot(await res.json()); await loadToken();
-      if(TOKEN && view==='drafts' && !(query.trim().length>1)) render(); }
+      if(TOKEN && (view==='design' || (view==='drafts' && !(query.trim().length>1)))) render(); /* these tabs carry token-only controls */ }
     catch(err){ toast('The site could not load its data ('+err.message+'). Reload in a minute.',60000); } })();
 }
 else{
