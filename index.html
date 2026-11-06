@@ -294,6 +294,7 @@ main{padding:16px 18px 80px;max-width:1500px;margin:0 auto}
     <button data-v="timeline">Timeline</button>
     <button data-v="talks">Conversations</button>
     <button data-v="design">Design</button>
+    <button data-v="write" id="nav-write" title="Writing the World: the desk, where the books are written" style="display:none">Writing ↗</button>
   </nav>
   <input id="q" placeholder="search everything…">
   <div class="tools">
@@ -616,7 +617,8 @@ async function readRepoFile(path){
 function splitCard(text){ const m=text.match(/^---\n[\s\S]*?\n---\n\s*/);
   if(!m) throw new Error('frontmatter not found');
   return {front:m[0],body:text.slice(m[0].length).trim()}; }
-function frontField(front,k){ const m=front.match(new RegExp('^'+k+': (.*)$','m')); return m?m[1].trim().replace(/^"+|"+$/g,'').replace(/\\"/g,'"'):''; }
+function frontField(front,k){ const m=front.match(new RegExp('^'+k+': (.*)$','m')); if(!m) return ''; let v=m[1].trim();
+  if(v.length>=2&&v[0]==='"'&&v[v.length-1]==='"') v=v.slice(1,-1); return v.replace(/\\"/g,'"'); } // one quote each side, then unescape: He said "yes" round-trips
 function setTitle(front,t){
   return front.replace(/^title: .*$/m,()=>'title: "'+t.replace(/"/g,'\\"')+'"').replace(/^title_status: .*$/m,'title_status: clay'); }
 // refuse to build on stale text: the repo copy must still read the way this page shows it
@@ -1661,7 +1663,9 @@ function render(){
   if(view==='shelf')renderShelf(); else if(view==='storylines')renderStorylines();
   else if(view==='drafts')renderDrafts(); else if(view==='timeline')renderTimeline(); else renderCharacters();
 }
+if(PLAIN) document.getElementById('nav-write').style.display='inline';  // the desk lives at /write/ on the Access-locked host only
 document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>{
+  if(b.dataset.v==='write'){ location.href='/write/'; return; }
   view=b.dataset.v; query=''; document.getElementById('q').value='';
   document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b)); render();
 }));
